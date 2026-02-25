@@ -1,0 +1,23 @@
+services:
+  axiom_runtime:
+    build: .
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/features || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      ENABLE_PY: 0
+      TELEMETRY_BASE_URL: ""  # e.g. http://192.168.86.31:8080
+      NODE_ENV: development
+    # Bind-mount source for live edits, but keep container-installed deps
+    volumes:
+      - ./server:/app/server
+      - /app/server/node_modules
+      - ./web:/app/web
+    command: ["node", "--watch", "server/server.js"]

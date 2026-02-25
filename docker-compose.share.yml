@@ -1,0 +1,19 @@
+# Easiest way to share the platform: only the main app, no proxy/HMI.
+# Recipients need: Docker Desktop (or Docker Engine) — no Node.js or Python.
+#
+# Usage:
+#   docker compose -f docker-compose.share.yml up --build
+#
+# Then open: http://localhost:3000
+
+services:
+  axiom_runtime:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      ENABLE_PY: 0
+      NODE_ENV: production
+      HMI_AUTH_BYPASS: "1"
+    restart: unless-stopped

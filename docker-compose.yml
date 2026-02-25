@@ -1,0 +1,16 @@
+## Runtime-only compose (for Electron installer workflows)
+##
+## Brings up ONLY the Axiom runtime on port 3000.
+## If you want live-reload dev, use: docker compose -f docker-compose.axiom-runtime.dev.yml up --build
+services:
+  axiom_runtime:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      ENABLE_PY: 0
+      NODE_ENV: production
+      # If you don't have auth wired yet, keep this enabled in dev demos.
+      HMI_AUTH_BYPASS: "1"
+    restart: unless-stopped

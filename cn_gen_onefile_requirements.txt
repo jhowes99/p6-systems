@@ -1,0 +1,4 @@
+# Single-file control narrative generator (cn_gen_onefile.py)
+PyMuPDF>=1.23.0
+pandas>=2.0.0
+python-docx>=1.0.0

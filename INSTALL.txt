@@ -1,0 +1,39 @@
+================================================================================
+  Axiom Verify - Install and share
+================================================================================
+
+--- IF YOU RECEIVED A ZIP (e.g. from Google Drive) ---
+
+1. Unzip the folder anywhere (e.g. Desktop or Documents).
+
+2. Double-click INSTALL.bat
+   - First time only. It installs dependencies (needs internet).
+   - You must have Node.js installed: https://nodejs.org/ (use LTS).
+   - If Node is missing, INSTALL.bat will tell you; install Node and run it again.
+
+3. Double-click START.bat
+   - Starts the app and opens your browser to http://localhost:3000
+   - To stop: close the black window or press Ctrl+C in it.
+
+That's it. Use the Workflow page to import, validate, run tests, and export.
+
+
+--- IF YOU WANT TO SHARE THIS APP (e.g. via Google Drive) ---
+
+Option A - Share the whole folder as a ZIP
+  1. Zip the entire project folder (include INSTALL.bat, START.bat, server, web, etc.).
+  2. Upload the ZIP to Google Drive (or OneDrive, email, USB).
+  3. Tell recipients: "Unzip, then run INSTALL.bat once, then run START.bat. You need Node.js from nodejs.org if you don't have it."
+
+Option B - Use the installer to build a smaller ZIP
+  1. Run:  installer\create-portable.bat
+  2. It creates  AxiomControl-Portable-1.0.0.zip  in the project folder.
+  3. Upload that ZIP to Google Drive and share.
+  4. Recipients: unzip, run INSTALL.bat (once), then START.bat. Node.js required.
+
+Requirements for recipients
+  - Windows (for .bat files; Mac/Linux can use "npm start" from the folder).
+  - Node.js 18+ from https://nodejs.org/
+  - A modern browser (Chrome, Edge, Firefox).
+
+================================================================================

@@ -1,0 +1,179 @@
+Axiom Control (Ironclad Runtime) / Axiom Verify
+==============================================
+
+What it is
+----------
+Axiom Control is a local “virtual PLC” runtime with a web UI.
+You can:
+- Generate control logic from OT artifacts (P&IDs, I/O lists, Cause & Effect)
+- Run the logic locally in a scan-based virtual PLC
+- Toggle inputs and observe outputs, rungs, timers, memory
+- Explain why outputs are ON/OFF (interlocks, permissives, trips)
+- Generate and run tests (FAT/SAT-style)
+- Export control code (ST, IEC 61499, vendor formats)
+- Use Pharma/GxP mode for change control, traceability, e-signatures, audit trail, and a validation binder
+
+What it is NOT
+--------------
+- Not a production PLC runtime (no SIL/safety certification claims)
+- Not a full PLC IDE (no vendor-replacement ladder editor)
+- Not a SCADA replacement platform
+- Not inherently cloud-hosted (designed to run locally or inside Docker)
+
+High-level architecture
+-----------------------
+- Web UI: static HTML/CSS/JS in /web (no build step required)
+- Backend: Node.js + Express in /server/server.js
+- Virtual PLC: scan loop + ladder IR evaluator in /server/plc
+- Pharma Mode: compliance storage + API + write-gating in /server/pharma
+- Data persistence: file-based JSON for compliance in /server/data/pharma
+
+Core pages / modules (what the user sees)
+-----------------------------------------
+Home / Workflow
+- The hub to move between features and see system status.
+
+P&ID Import
+- Import a P&ID (or structured JSON) and generate a PLC program.
+- Optionally upload generated logic into the virtual PLC for testing.
+
+Panel Builder (“Build View”)
+- Build control logic visually (panel wiring style), compile to ladder IR, upload to runtime.
+
+Monitor
+- Live test bench: toggle inputs, view outputs, watch the diagram energize, see timers/memory.
+- This is the fastest “show value” screen in a demo.
+
+Interlocks / Explainability
+- Answers the key commissioning question: “Why is this output OFF?”
+- Shows permissives/trips/safety conditions causing the current behavior.
+
+Tests
+- Generate tests from Cause & Effect and execute them against the loaded IR.
+- Store and export results.
+
+Exports
+- Export ST and other formats for handoff or review.
+- Export IEC 61499 BasicFB XML for 4diac/61499 tools (exporter, not a runtime).
+
+Audit + Security
+- Audit log verification and Secure Mode (login + sessions).
+- Secure Mode is what makes sign-offs meaningful (ties actions to a user identity).
+
+Pharma Mode (GxP / Compliance)
+------------------------------
+Pharma Mode adds a compliance “overlay” to the runtime:
+- Project state machine: DRAFT → IN_REVIEW → RELEASED
+- Policies: lock editing in review, require CR for released edits, required signature steps
+- Requirements: capture URS/FRS/… items with risk classes (GMP/SAFETY/etc.)
+- Traceability: link requirements to rungs / IO / test cases; export a traceability matrix
+- Approvals: step-based approvals (EngineeringReview, ValidationReview, QAApproval)
+- E-signatures: signature record includes who signed, when, meaning (Approve/Review/Reject), optional comment
+- Audit trail: hash-chained pharma events for tamper evidence (verifyable)
+- Validation binder: generate a PDF binder for a release (where configured)
+
+Important behavior
+------------------
+IN_REVIEW lock:
+- When a project is “In Review”, editing is restricted (policy-driven).
+- Signing and releasing are still allowed (so you can complete approvals).
+
+RELEASED lock:
+- When a project is “Released”, edits are restricted unless a Change Request is opened (policy-driven).
+- Compliance views, exports, and signing can still be allowed depending on endpoint/policy.
+
+Separation of Duties (SoD):
+- In Pharma Mode, the author of the review package cannot approve their own release (SoD enforcement).
+
+Secure Mode + Pharma Mode
+-------------------------
+Secure Mode is the authentication layer:
+- When Secure Mode is OFF, the system behaves like a local demo (no login required).
+- When Secure Mode is ON, actions can require a logged-in session and role checks.
+
+Rule implemented in this project:
+- When Pharma Mode is enabled, Secure Mode is automatically enabled as well.
+- When Pharma Mode is enabled, demo users are auto-seeded (if they don’t exist).
+- The UI shows a “Demo Signers” popup to quickly choose a signer identity and log in.
+- There is a “Switch User” button in the Pharma compliance strip to re-open the picker.
+
+Demo users (for signatures demos)
+---------------------------------
+Password is shown so you can demo quickly. Use these to show multi-person approvals.
+
+- Olivia Author
+  username: olivia.author
+  password: demo
+  role intent: Author (can submit for review; cannot approve own release if SoD applies)
+
+- Riley Reviewer
+  username: riley.reviewer
+  password: demo
+  role intent: Reviewer (can sign Engineering/Validation steps)
+
+- Quinn QA Approver
+  username: quinn.qa
+  password: demo
+  role intent: Approver (final QA approval step)
+
+- Dana Admin
+  username: dana.admin
+  password: demo
+  role intent: Admin (override/superuser for demoing)
+
+- Default Admin (built-in)
+  username: admin
+  password: admin
+
+How to run (practical)
+----------------------
+Local (no Docker):
+- Install deps, start the server, then open the UI in a browser.
+  Typical: npm start
+  Default URL: http://localhost:3000
+
+Docker (shareable):
+- App-only compose is the easiest “works on any machine” option.
+- Health check endpoint: GET /api/features
+
+Note on old HMI/SCADA containers:
+- Legacy RapidSCADA/nginx proxy components were archived and are not required for the built-in HMI option.
+
+Quick demo script (5–10 minutes)
+--------------------------------
+Demo A — Virtual PLC value (fastest):
+1) Open P&ID Import or Panel Builder
+2) Generate logic and upload to the runtime
+3) Open Monitor
+4) Toggle an input and show:
+   - outputs change
+   - rung energization
+   - explanation of why an output is OFF (interlocks/permissives)
+
+Demo B — Pharma compliance + signatures:
+1) Open Pharma page
+2) Toggle “Pharma Mode” ON
+   - Secure Mode turns ON automatically
+   - Demo Signers popup appears
+3) Choose “Olivia Author” and log in
+4) Click “Submit for Review” (project becomes IN_REVIEW; edits lock)
+5) Click “Switch User” → choose “Riley Reviewer”
+6) Open “Approvals” and sign EngineeringReview + ValidationReview
+7) Switch User → choose “Quinn QA Approver”
+8) Sign QAApproval
+9) Show that Release becomes available once required steps are signed
+10) (Optional) Release to create an immutable snapshot and export binder/traceability
+
+Key proof points (what this tool demonstrates)
+----------------------------------------------
+- Turn real OT artifacts into runnable control logic quickly
+- Test and explain control intent before wiring up real hardware
+- Provide a compliance-ready workflow (states, approvals, signatures, audit chain, traceability)
+- Support demos of multi-person sign-off and separation-of-duties
+
+Common “why” (business framing)
+-------------------------------
+- Reduce commissioning risk: catch logic and integration problems earlier.
+- Make control intent explainable: shorten debug time and improve handoff quality.
+- Make sign-offs auditable: tie approvals to users, roles, timestamps, and change context.
+
