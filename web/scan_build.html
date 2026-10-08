@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Scan-to-Build — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <style>
+      .card { border:1px solid #ddd; border-radius: 12px; padding: 14px; background:#fff; }
+      .upload { border:2px dashed #ddd; border-radius: 12px; padding: 18px; background:#fafafa; }
+      .btn { display:inline-block; padding:10px 12px; border-radius: 10px; border:1px solid #111; background:#111; color:#fff; cursor:pointer; }
+      .btn.secondary { background:#fff; color:#111; }
+      .small { font-size: 12px; color:#444; }
+      pre { background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 10px; overflow:auto; }
+      input[type=file] { margin-top: 10px; }
+    </style>
+  </head>
+  <body data-app-active="scan">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <h1>Scan-to-Build</h1>
+      <p class="small">Upload a nameplate/QR/VFD label photo. We OCR it and suggest a control pattern.</p>
+
+      <div class="card">
+        <div class="upload">
+          <div><strong>Upload photo</strong></div>
+          <div class="small">Best results: sharp, high-contrast, fill the frame.</div>
+          <input type="file" id="file" accept=".png,.jpg,.jpeg,.webp" />
+          <div style="margin-top:10px;">
+            <button class="btn" id="run">Scan</button>
+            <a class="btn secondary" href="/wizards.html">Open Control Templates</a>
+          </div>
+        </div>
+        <div class="small" id="msg" style="margin-top:10px;"></div>
+        <pre id="out"></pre>
+      </div>
+    </main>
+
+    <!-- Tesseract served locally -->
+    <script src="/vendor/tesseract/tesseract.min.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="scan_build.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,242 @@
+{
+  "custom": {},
+  "params": {},
+  "props": {
+    "defaultSize": {
+      "width": 1200,
+      "height": 720
+    }
+  },
+  "root": {
+    "type": "ia.container.coord",
+    "meta": {
+      "name": "root"
+    },
+    "props": {
+      "mode": "percent"
+    },
+    "children": [
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "Title" },
+        "props": {
+          "text": "P6 Water Transfer",
+          "style": {
+            "fontSize": "28px",
+            "fontWeight": "700",
+            "color": "#1a2b24"
+          }
+        },
+        "position": { "x": 2, "y": 2, "width": 40, "height": 6 }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "Subtitle" },
+        "props": {
+          "text": "Live values via OPC UA → P6 Runtime (not hardcoded)",
+          "style": { "fontSize": "13px", "color": "#4a5c54" }
+        },
+        "position": { "x": 2, "y": 8, "width": 55, "height": 4 }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "EstopLabel" },
+        "props": {
+          "text": "E-STOP HEALTHY",
+          "style": { "fontSize": "16px", "fontWeight": "600" }
+        },
+        "position": { "x": 70, "y": 3, "width": 26, "height": 5 },
+        "propConfig": {
+          "props.style.color": {
+            "binding": {
+              "type": "expr",
+              "config": {
+                "expression": "if({[P6]WaterTransfer/ESTOP101/Healthy}, '#1b7a3d', '#b00020')"
+              }
+            }
+          },
+          "props.text": {
+            "binding": {
+              "type": "expr",
+              "config": {
+                "expression": "if({[P6]WaterTransfer/ESTOP101/Healthy}, 'E-STOP HEALTHY (sim)', 'E-STOP ACTIVE (sim)')"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "PumpHeader" },
+        "props": {
+          "text": "P101 / M101",
+          "style": { "fontSize": "18px", "fontWeight": "600" }
+        },
+        "position": { "x": 2, "y": 18, "width": 30, "height": 4 }
+      },
+      {
+        "type": "ia.display.led",
+        "meta": { "name": "PumpRunning" },
+        "props": { "color": "#2ecc71" },
+        "position": { "x": 2, "y": 24, "width": 6, "height": 6 },
+        "propConfig": {
+          "props.value": {
+            "binding": {
+              "type": "tag",
+              "config": {
+                "tagPath": "[P6]WaterTransfer/P101/RunningFeedback",
+                "bidirectional": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "PumpRunningLbl" },
+        "props": { "text": "Pump running feedback" },
+        "position": { "x": 10, "y": 25, "width": 25, "height": 4 }
+      },
+      {
+        "type": "ia.display.led",
+        "meta": { "name": "MotorEnergize" },
+        "props": { "color": "#3498db" },
+        "position": { "x": 2, "y": 32, "width": 6, "height": 6 },
+        "propConfig": {
+          "props.value": {
+            "binding": {
+              "type": "tag",
+              "config": {
+                "tagPath": "[P6]WaterTransfer/M101/Energize",
+                "bidirectional": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "MotorEnergizeLbl" },
+        "props": { "text": "Motor energize" },
+        "position": { "x": 10, "y": 33, "width": 25, "height": 4 }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "ValveHeader" },
+        "props": {
+          "text": "XV101",
+          "style": { "fontSize": "18px", "fontWeight": "600" }
+        },
+        "position": { "x": 40, "y": 18, "width": 30, "height": 4 }
+      },
+      {
+        "type": "ia.display.led",
+        "meta": { "name": "ValveOpenCmd" },
+        "props": { "color": "#f39c12" },
+        "position": { "x": 40, "y": 24, "width": 6, "height": 6 },
+        "propConfig": {
+          "props.value": {
+            "binding": {
+              "type": "tag",
+              "config": {
+                "tagPath": "[P6]WaterTransfer/XV101/OpenCommand",
+                "bidirectional": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "ValveOpenCmdLbl" },
+        "props": { "text": "Open command" },
+        "position": { "x": 48, "y": 25, "width": 20, "height": 4 }
+      },
+      {
+        "type": "ia.display.led",
+        "meta": { "name": "ValveOpenedFb" },
+        "props": { "color": "#27ae60" },
+        "position": { "x": 40, "y": 32, "width": 6, "height": 6 },
+        "propConfig": {
+          "props.value": {
+            "binding": {
+              "type": "tag",
+              "config": {
+                "tagPath": "[P6]WaterTransfer/XV101/OpenedFeedback",
+                "bidirectional": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "ValveOpenedFbLbl" },
+        "props": { "text": "Opened feedback" },
+        "position": { "x": 48, "y": 33, "width": 20, "height": 4 }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "TankHeader" },
+        "props": {
+          "text": "TANK101 / LSH101",
+          "style": { "fontSize": "18px", "fontWeight": "600" }
+        },
+        "position": { "x": 70, "y": 18, "width": 28, "height": 4 }
+      },
+      {
+        "type": "ia.display.progress",
+        "meta": { "name": "TankLevel" },
+        "props": {
+          "mode": "determinate",
+          "max": 100,
+          "value": 0
+        },
+        "position": { "x": 70, "y": 24, "width": 26, "height": 8 },
+        "propConfig": {
+          "props.value": {
+            "binding": {
+              "type": "tag",
+              "config": {
+                "tagPath": "[P6]WaterTransfer/TANK101/LevelPct",
+                "bidirectional": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.led",
+        "meta": { "name": "LevelHigh" },
+        "props": { "color": "#e74c3c" },
+        "position": { "x": 70, "y": 36, "width": 6, "height": 6 },
+        "propConfig": {
+          "props.value": {
+            "binding": {
+              "type": "tag",
+              "config": {
+                "tagPath": "[P6]WaterTransfer/LSH101/High",
+                "bidirectional": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "LevelHighLbl" },
+        "props": { "text": "High level" },
+        "position": { "x": 78, "y": 37, "width": 18, "height": 4 }
+      },
+      {
+        "type": "ia.display.label",
+        "meta": { "name": "Disclaimer" },
+        "props": {
+          "text": "Simulated E-stop only — not a certified physical safety function. Bind tags under [P6] per tags/tag-paths.md.",
+          "style": { "fontSize": "11px", "color": "#7a4b00" }
+        },
+        "position": { "x": 2, "y": 90, "width": 96, "height": 6 }
+      }
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Runtime — Simulation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="simulation.css" />
+</head>
+<body data-app-active="simulate">
+  <div id="appShell"></div>
+  <main class="wrap simPage">
+    <header class="simHead">
+      <div>
+        <h1>P6 Runtime</h1>
+        <p class="small">Water Transfer System — live signals from the server scan engine (not mocks).</p>
+      </div>
+      <div id="modePill" class="modePill">—</div>
+    </header>
+
+    <section class="controls">
+      <button type="button" data-act="start">START</button>
+      <button type="button" data-act="pause">PAUSE</button>
+      <button type="button" data-act="resume">RESUME</button>
+      <button type="button" data-act="step">STEP</button>
+      <button type="button" data-act="stop">STOP</button>
+      <button type="button" data-act="reset">RESET</button>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="grid2">
+      <div class="panel">
+        <h2>Operator actions</h2>
+        <div class="ops">
+          <button type="button" data-sig="System.Start" data-pulse="1">START TRANSFER</button>
+          <button type="button" data-sig="System.Reset" data-pulse="1">RESET TRIP</button>
+          <button type="button" id="btnEstop">ACTIVATE E-STOP</button>
+          <button type="button" id="btnEstopClear">CLEAR E-STOP</button>
+          <button type="button" id="btnLshOn">LSH HIGH</button>
+          <button type="button" id="btnLshOff">LSH NORMAL</button>
+        </div>
+        <p class="small warn">E-stop is a simulated input. It demonstrates model behavior only — not a certified safety function.</p>
+      </div>
+      <div class="panel">
+        <h2>Equipment status</h2>
+        <div id="equip" class="equip"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Signals</h2>
+      <div id="signals" class="sigTable"></div>
+    </section>
+  </main>
+
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script src="simulation.js"></script>
+</body>
+</html>

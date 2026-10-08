@@ -1,0 +1,10 @@
+{
+  "title": "P6 Water Transfer",
+  "description": "Example Perspective HMI for P6 Runtime Water Transfer via OPC UA. Values must come from live OPC tags — not hardcoded.",
+  "enabled": true,
+  "inactivityDeadline": 0,
+  "userSource": "",
+  "requiredRoles": "",
+  "parent": "",
+  "templates": []
+}

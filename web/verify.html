@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Verify</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body data-app-active="verify">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <div class="card">
+      <h1 style="margin:0;">P6 Verify</h1>
+      <p class="small">Automated FAT against the Water Transfer reference model. Evidence includes version references.</p>
+      <p class="small" style="color:#7a4b00;">Simulated E-stop verifies model behavior only — it does not certify a physical safety function.</p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:1rem 0;">
+        <button id="btnRun" type="button">RUN P101_ESTOP_SHUTDOWN</button>
+        <button id="btnPdf" type="button">RUN + DOWNLOAD PDF</button>
+      </div>
+      <pre id="out" class="small" style="white-space:pre-wrap;background:#f6f8f7;padding:1rem;border:1px solid #ddd;min-height:8rem;"></pre>
+    </div>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    const out = document.getElementById("out");
+    document.getElementById("btnRun").onclick = async () => {
+      out.textContent = "Running…";
+      const res = await fetch("/api/verify/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    };
+    document.getElementById("btnPdf").onclick = async () => {
+      out.textContent = "Generating PDF…";
+      const res = await fetch("/api/verify/run.pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      if (!res.ok) {
+        out.textContent = await res.text();
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "P101_ESTOP_SHUTDOWN.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+      out.textContent = "PDF downloaded.";
+    };
+  </script>
+</body>
+</html>

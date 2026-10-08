@@ -1,0 +1,244 @@
+/* Safety Configuration Page Styles */
+.safetyTop{
+  display:flex;
+  align-items:flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.safetyLayout{
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.safetySidebar{
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.safetyMain{
+  min-height: 400px;
+}
+.safetyTabs{
+  display:flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+}
+.safetyTab{
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -10px;
+  transition: all 0.2s;
+}
+.safetyTab:hover{
+  background: rgba(15,23,42,.04);
+  color: var(--text);
+}
+.safetyTab.active{
+  color: var(--text);
+  border-bottom-color: var(--safety);
+}
+.safetyTabContent{
+  display: none;
+}
+.safetyTabContent.active{
+  display: block;
+}
+.card2{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+.sectionHeader{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  margin-bottom: 16px;
+}
+.deviceList{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.deviceItem{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,.7);
+}
+.deviceItem.safety{
+  border-color: var(--safety);
+  background: rgba(250,204,21,.08);
+}
+.deviceInfo{
+  flex: 1;
+}
+.deviceName{
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.deviceMeta{
+  font-size: 12px;
+  color: var(--muted);
+  display:flex;
+  gap: 12px;
+  align-items:center;
+}
+.deviceActions{
+  display:flex;
+  gap: 8px;
+}
+.emptyState{
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+.emptyIcon{
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.emptyText{
+  font-weight: 900;
+  font-size: 16px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.emptyHint{
+  font-size: 12px;
+  color: var(--muted);
+}
+.formGroup{
+  margin-bottom: 12px;
+}
+.checkboxLabel{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+.checkboxLabel input[type="checkbox"]{
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.quickActions{
+  display:flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.interlockList{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.interlockItem{
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.interlockHeader{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  margin-bottom: 10px;
+}
+.interlockTitle{
+  font-weight: 900;
+  font-size: 14px;
+}
+.interlockCondition{
+  font-size: 13px;
+  color: var(--muted);
+  font-family: monospace;
+  background: rgba(15,23,42,.04);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+.safetyChainView{
+  padding: 16px;
+  background: rgba(15,23,42,.02);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.safetyChainLogic{
+  padding: 16px;
+  background: rgba(15,23,42,.02);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.safetyChecklist{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.checklistItem{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.checklistItem.complete{
+  background: rgba(22,163,74,.05);
+  border-color: rgba(22,163,74,.3);
+}
+.checklistItem.incomplete{
+  background: rgba(239,68,68,.05);
+  border-color: rgba(239,68,68,.3);
+}
+.checklistIcon{
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.checklistText{
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+}
+.safetySummary{
+  padding: 16px;
+  background: rgba(15,23,42,.02);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.safetySummary strong{
+  color: var(--text);
+  font-weight: 900;
+}
+@media (max-width: 1000px) {
+  .safetyLayout{
+    grid-template-columns: 1fr;
+  }
+  .safetySidebar{
+    position: static;
+    max-height: none;
+  }
+}

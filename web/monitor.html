@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Monitor — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <link rel="stylesheet" href="monitor.css" />
+  </head>
+  <body data-app-active="monitor">
+    <div id="appShell"></div>
+
+    <main class="wrap page">
+      <div class="page-header" style="margin-bottom: 14px;">
+        <div class="page-breadcrumb">Monitor</div>
+        <h1 class="page-title" style="margin:0 0 4px 0;">Monitor</h1>
+        <p class="page-subtitle" style="margin:0;">Live I/O and diagram.</p>
+      </div>
+      <div class="card" style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 14px;">
+        <div class="small" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span id="plcBadge" class="pill">PLC</span>
+          <span id="scanBeat" class="beat" title="Scan heartbeat"></span>
+          <span id="scanInfo"></span>
+          <span id="inhibInfo"></span>
+        </div>
+        <div class="small" id="featureInfo"></div>
+      </div>
+
+      <div class="card" id="goalHeader" style="margin-bottom: 14px; padding: 12px 14px;">
+        <div style="display:flex; align-items:center; gap: 8px;">
+          <strong style="font-size: 13px; color: var(--text);">Goal:</strong>
+          <span id="goalText" class="small" style="flex: 1;">No goal set. Import a P&ID to set a goal.</span>
+        </div>
+      </div>
+
+      <section>
+        <h2>Diagram (What turns ON what)</h2>
+        <div class="diagramCard">
+          <div class="small" id="diagramHint">
+            Upload a program from the Editor/P&amp;ID Import to see a live diagram.
+          </div>
+          <div class="diagramWrap">
+            <svg id="diagramSvg" class="diagramSvg" viewBox="0 0 940 260" preserveAspectRatio="xMinYMin meet"></svg>
+          </div>
+          <div id="diagramExplain" class="diagramExplain"></div>
+          <div class="legend small">
+            <span class="pill on">ON</span>
+            <span class="pill off">OFF</span>
+            <span class="pill active">Rung powered</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="inputsSection">
+        <h2>Inputs</h2>
+          <div id="beginnerModeHint" class="card" style="display:none; margin-bottom: 14px; padding: 12px; background: #f0f9ff; border: 1px solid #0ea5e9;">
+            <div class="small">
+              <strong>Beginner Mode:</strong> Raw I/O toggles are hidden. Use physical inputs from the Electrician view instead.
+              <br>Switch to <strong>Advanced</strong> mode in the top bar to see raw toggles.
+            </div>
+          </div>
+        <div id="inputs" class="grid"></div>
+      </section>
+
+      <section>
+        <h2>Outputs</h2>
+        <div id="outputs" class="grid"></div>
+      </section>
+
+      <section id="analogSection">
+        <h2>Analog (AI/AO)</h2>
+        <p class="small" style="margin-bottom: 10px;">Analog inputs (A0–A3) affect ladder logic via comparators. Analog outputs (B0–B3) show numeric results.</p>
+        <div id="analogInputs" class="analogRow"></div>
+        <div id="analogOutputs" class="analogRow" style="margin-top: 12px;"></div>
+      </section>
+
+      <section>
+        <h2>Interlocks</h2>
+        <div class="card2">
+          <div class="small" style="margin-bottom: 10px;">View output status and blocking conditions. Click an output to see detailed permissives, trips, and safety chain information.</div>
+          <div id="interlocks" class="interlockView"></div>
+          <div id="interlockDetail" class="interlockDetail" style="display:none; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(15,23,42,.1);">
+            <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <strong id="interlockDetailTitle">Select an output above</strong>
+              <button class="btn secondary" id="interlockDetailClose" style="padding: 6px 12px; font-size: 12px;">Close</button>
+            </div>
+            <div class="section" style="margin-bottom: 12px;">
+              <div class="small" style="font-weight: 700; margin-bottom: 6px;">Summary</div>
+              <div id="interlockSummary" class="small" style="padding: 8px; background: rgba(15,23,42,.03); border-radius: 8px;"></div>
+            </div>
+            <div class="section" style="margin-bottom: 12px;">
+              <div class="small" style="font-weight: 700; margin-bottom: 6px;">Required Permissives (Missing)</div>
+              <div id="interlockPerms" class="chips" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            </div>
+            <div class="section" style="margin-bottom: 12px;">
+              <div class="small" style="font-weight: 700; margin-bottom: 6px;">Active Trips (Blocking)</div>
+              <div id="interlockTrips" class="chips" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            </div>
+            <div class="section" style="margin-bottom: 12px;">
+              <div class="small" style="font-weight: 700; margin-bottom: 6px;">Safety Chain</div>
+              <div id="interlockSafety" class="chips" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            </div>
+            <div class="section">
+              <div class="small" style="font-weight: 700; margin-bottom: 6px;">Writer Rungs</div>
+              <div id="interlockWriters" class="small"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Explain Output</h2>
+        <div class="card2">
+          <div class="row">
+            <div class="small">Selected:</div>
+            <div><strong id="explainSel">None</strong></div>
+            <div class="small" id="explainLive"></div>
+          </div>
+          <div id="explainPanel" class="explainPanel small">
+            Click an output to see “this output is inhibited because…”.
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Fault Injection (Force / Stuck)</h2>
+        <div class="card2">
+          <div class="faultForm">
+            <input id="faultVar" class="input" placeholder="Var (e.g. I0, Q0, M0)" />
+            <select id="faultMode" class="input">
+              <option value="force">force</option>
+              <option value="stuck">stuck</option>
+            </select>
+            <select id="faultValue" class="input">
+              <option value="1">ON</option>
+              <option value="0">OFF</option>
+            </select>
+            <button id="btnFaultSet" class="btn">Set</button>
+            <button id="btnFaultClear" class="btn secondary">Clear Var</button>
+          </div>
+          <div class="small" id="faultErr" style="margin-top:8px; color:#9a3412;"></div>
+          <div id="faultList" class="faultList"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Memory (M)</h2>
+        <div id="mem" class="grid"></div>
+      </section>
+
+      <section>
+        <h2>Status</h2>
+        <pre id="status"></pre>
+      </section>
+    </main>
+
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="monitor.js"></script>
+  </body>
+</html>

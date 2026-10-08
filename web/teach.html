@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Teach Mode — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <style>
+      .card { border:1px solid #ddd; border-radius: 12px; padding: 14px; background:#fff; }
+      .row { display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
+      .btn { display:inline-block; padding:10px 12px; border-radius: 10px; border:1px solid #111; background:#111; color:#fff; cursor:pointer; }
+      .btn.secondary { background:#fff; color:#111; }
+      .small { font-size: 12px; color:#444; }
+      .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+      .tile { border:1px solid #ddd; border-radius: 12px; padding: 10px; background:#fafafa; }
+      .lamp { width: 14px; height: 14px; border-radius: 50%; border:2px solid #999; display:inline-block; vertical-align: middle; margin-right: 8px; }
+      .lamp.on { border-color:#2c8a2c; background:#34d399; }
+      .lamp.off { border-color:#b45; background:#fca5a5; }
+      pre { background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 10px; overflow:auto; }
+    </style>
+  </head>
+  <body data-app-active="teach">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <h1>Teach Mode</h1>
+      <p class="small">Record examples of when an output should be ON/OFF. We infer plain-language rules and generate PLC logic.</p>
+
+      <div class="card">
+        <div class="row">
+          <label>Output tag</label>
+          <input id="outTag" value="Motor M1" />
+          <label>Inputs (comma-separated)</label>
+          <input id="inTags" value="Start Button, Stop Button, E-Stop OK, Overload OK" style="min-width: 320px;" />
+          <button class="btn" id="recordOn">Record ON Example</button>
+          <button class="btn secondary" id="recordOff">Record OFF Example</button>
+          <button class="btn secondary" id="compile">Generate + Upload</button>
+        </div>
+
+        <div class="small" id="msg" style="margin-top:10px;"></div>
+        <div class="grid" id="examples"></div>
+        <h3 style="margin-top:14px;">Generated Logic (preview)</h3>
+        <pre id="preview"></pre>
+      </div>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script src="teach.js"></script>
+  </body>
+</html>
+

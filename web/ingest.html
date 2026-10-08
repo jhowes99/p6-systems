@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Document Ingest / OCR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+  <style>
+    .cand { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid #eee; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+    .cand head, .cand-h { font-weight: 700; }
+    .conf { color: #666; }
+    .warn { color: #7a4b00; }
+  </style>
+</head>
+<body data-app-active="ingest">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <h1 style="margin:0;">Document Ingestion &amp; OCR</h1>
+    <p class="small">PDF text extract + image OCR (tesseract). Candidates stay <b>ENGINEERING_INFERENCE</b> until you check and promote them.</p>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+      <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.csv,image/*,application/pdf" />
+      <button id="go" type="button">Extract / OCR</button>
+      <button id="selectAll" type="button">Select all</button>
+      <button id="promote" type="button" disabled>Promote selected</button>
+      <label class="small"><input type="checkbox" id="approve" /> Mark ENGINEER_APPROVED on promote</label>
+    </div>
+    <p id="meta" class="small"></p>
+    <p id="warn" class="small warn"></p>
+    <div id="list"></div>
+    <details style="margin-top:1rem;">
+      <summary class="small">Raw extract</summary>
+      <pre id="raw" class="small" style="background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;max-height:240px;overflow:auto;"></pre>
+    </details>
+    <pre id="out" class="small" style="margin-top:1rem;background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    let last = null;
+    const list = document.getElementById("list");
+    const out = document.getElementById("out");
+
+    function renderCandidates(cands) {
+      list.innerHTML = `<div class="cand cand-h"><span></span><span>Tag</span><span>Type</span><span>Confidence</span><span>Include</span></div>`;
+      (cands || []).forEach((c, i) => {
+        const row = document.createElement("div");
+        row.className = "cand";
+        row.innerHTML = `<span>${i + 1}</span><span>${c.tag}</span><span>${c.type}</span><span class="conf">${Math.round((c.confidence || 0) * 100)}%</span>`;
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.dataset.idx = String(i);
+        cb.checked = (c.confidence || 0) >= 0.5;
+        row.appendChild(cb);
+        list.appendChild(row);
+      });
+      document.getElementById("promote").disabled = !(cands || []).length;
+    }
+
+    document.getElementById("go").onclick = async () => {
+      const f = document.getElementById("file").files[0];
+      if (!f) return alert("Choose a PDF, PNG, JPEG, or CSV");
+      out.textContent = "Running OCR / extract…";
+      const fd = new FormData();
+      fd.append("file", f);
+      const r = await fetch("/api/ingest/ocr", { method: "POST", body: fd });
+      last = await r.json();
+      const ex = last.extracted || {};
+      document.getElementById("meta").textContent =
+        `engine=${ex.engine || "?"} confidence=${ex.confidence != null ? Math.round(ex.confidence * 100) + "%" : "n/a"} candidates=${(last.candidates || []).length}`;
+      document.getElementById("warn").textContent = ex.warning || last.error || "";
+      document.getElementById("raw").textContent = ex.text || "(empty)";
+      renderCandidates(last.candidates || []);
+      out.textContent = last.ok === false ? JSON.stringify(last, null, 2) : "Review candidates above, then promote.";
+    };
+
+    document.getElementById("selectAll").onclick = () => {
+      list.querySelectorAll('input[type=checkbox]').forEach((cb) => { cb.checked = true; });
+    };
+
+    document.getElementById("promote").onclick = async () => {
+      if (!last?.candidates?.length) return;
+      const selected = [];
+      list.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+        if (cb.checked) selected.push(last.candidates[Number(cb.dataset.idx)]);
+      });
+      if (!selected.length) return alert("Select at least one candidate");
+      const body = {
+        documentName: document.getElementById("file").files[0]?.name,
+        format: document.getElementById("file").files[0]?.type,
+        equipment: selected,
+        approveAll: document.getElementById("approve").checked
+      };
+      const r = await fetch("/api/ingest/ocr/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-P6-Role": "engineer" },
+        body: JSON.stringify(body)
+      });
+      out.textContent = JSON.stringify(await r.json(), null, 2);
+    };
+  </script>
+</body>
+</html>

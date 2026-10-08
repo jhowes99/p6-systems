@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Control narrative — Axiom</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <style>
+    body { max-width: 640px; margin: 0 auto; padding: 24px; }
+    .step { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-weight: 600; margin-bottom: 6px; }
+    .field input[type="file"],
+    .field input[type="text"] { width: 100%; padding: 10px; box-sizing: border-box; border-radius: 10px; border: 1px solid #e2e8f0; }
+    #btn { margin-top: 8px; padding: 12px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 10px; background: #0f172a; color: #fff; font-weight: 600; }
+    #btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .out { margin-top: 20px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .out h3 { margin: 0 0 12px 0; font-size: 16px; }
+    .out a { display: block; margin: 6px 0; color: #0369a1; }
+    .err { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .back { font-size: 14px; margin-bottom: 24px; }
+    .back a { color: #64748b; text-decoration: none; }
+    .back a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <p class="back"><a href="/">← Back to app</a></p>
+  <h1>Control narrative</h1>
+  <p class="step">Use this page from the same place you use P&amp;ID Import (same URL/host). Pick your PDF and click Generate.</p>
+
+  <div class="field">
+    <label>Logic/functional diagrams PDF *</label>
+    <input type="file" id="logic" accept=".pdf,application/pdf" />
+  </div>
+  <div class="field">
+    <label>Control narrative template (optional)</label>
+    <input type="file" id="template" accept=".pdf,application/pdf" />
+  </div>
+  <div class="field">
+    <label>Project</label>
+    <input type="text" id="project" value="Combustion Control System, Fully Metered" />
+  </div>
+  <div class="field">
+    <label>Customer</label>
+    <input type="text" id="customer" value="TotalEnergies Port Arthur, TX." />
+  </div>
+  <button type="button" id="btn">Generate control narrative</button>
+
+  <div id="result"></div>
+
+  <script>
+(function () {
+  const result = document.getElementById("result");
+  const btn = document.getElementById("btn");
+
+  function apiBase() {
+    var path = typeof window !== "undefined" && window.location ? window.location.pathname : "";
+    var dir = path.replace(/\/[^/]*$/, "") || "";
+    return dir + "/api";
+  }
+
+  function show(msg, isErr) {
+    result.innerHTML = msg;
+    result.className = "out" + (isErr ? " err" : "");
+    result.style.display = "block";
+  }
+
+  document.getElementById("btn").addEventListener("click", async function () {
+    const logic = document.getElementById("logic").files[0];
+    if (!logic) {
+      show("Please choose a Logic/functional diagrams PDF.", true);
+      return;
+    }
+    result.style.display = "none";
+    btn.disabled = true;
+    const fd = new FormData();
+    fd.append("logic", logic);
+    fd.append("project", document.getElementById("project").value.trim());
+    fd.append("customer", document.getElementById("customer").value.trim());
+    const tpl = document.getElementById("template").files[0];
+    if (tpl) fd.append("template", tpl);
+
+    var base = apiBase();
+    try {
+      const r = await fetch(base + "/narrative/generate", { method: "POST", body: fd });
+      const data = r.ok ? await r.json() : { ok: false, error: (await r.text()) || "Request failed." };
+      if (data.ok && data.outputs) {
+        const expected = ["control_narrative.md", "control_narrative.docx", "control_narrative.pdf", "tag_dictionary.csv", "cause_effect.csv"];
+        const byName = {};
+        (data.outputs || []).forEach(function (o) { byName[o.name] = o; });
+        let html = "<h3>Done. Download:</h3>";
+        expected.forEach(function (name) {
+          const o = byName[name];
+          if (o) {
+            html += "<a href=\"" + base + "/narrative/exports/" + encodeURIComponent(o.path) + "\" download>" + (o.name || o.path) + "</a>";
+          } else {
+            html += "<span style=\"display:block;color:#64748b;\">" + name + " (not generated)</span>";
+          }
+        });
+        if (!byName["control_narrative.pdf"] && (data.warnings || []).length) {
+          html += "<p class=\"small\" style=\"margin-top:10px;color:#64748b;\">To generate PDF: install reportlab (e.g. cd control_narrative_gen && pip install -r requirements.txt or use a .venv there).</p>";
+        }
+        show(html, false);
+      } else {
+        show((data.error || "Request failed."), true);
+      }
+    } catch (e) {
+      show("Request failed. Open this page from the same place you use P&amp;ID Import (same app URL).", true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+  </script>
+</body>
+</html>

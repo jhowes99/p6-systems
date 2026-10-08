@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Project Validation — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <link rel="stylesheet" href="validation.css" />
+  </head>
+  <body data-app-active="validation">
+    <div id="appShell"></div>
+
+    <main class="wrap page">
+      <div class="page-header">
+        <div class="page-breadcrumb">Validate</div>
+        <h1 class="page-title">Project Validation</h1>
+        <p class="page-subtitle">Cross-document OT sanity checks: P&ID ↔ IO List ↔ Cause&Effect.</p>
+      </div>
+
+      <div class="card validationCard">
+        <div class="row">
+          <h2 style="margin:0;">Validation</h2>
+          <button class="btn btn-primary" id="btnValidateLast">Run Validation</button>
+          <button class="btn btn-secondary" id="btnApplyAutoFixes" title="Add C&E tags missing from IO to IO list; merge rules that write to the same effect">Apply auto-fixes</button>
+        </div>
+        <p class="small">Run validation on the last imported bundle, or import a project first from Import and Generate. Use <strong>Apply auto-fixes</strong> to add tags referenced in Cause&Effect to the IO list and to combine multiple rules that write to the same effect.</p>
+
+        <div id="scoreSection" class="scoreSection" style="display:none;">
+          <div class="scoreGauge" id="scoreGauge">
+            <span class="scoreValue" id="scoreValue">—</span>
+            <span class="scoreLabel">Score</span>
+          </div>
+          <div class="statsRow" id="statsRow"></div>
+        </div>
+
+        <div id="errorsSection" class="section" style="display:none;">
+          <h3 class="errTitle">Errors</h3>
+          <p class="small">Select one or more, then use the bar below to accept as exceptions. <button type="button" id="selectAllErrors" class="linkLike btn-small">Select all</button></p>
+          <ul id="errorsList" class="list errList"></ul>
+        </div>
+
+        <div id="warningsSection" class="section" style="display:none;">
+          <h3 class="warnTitle">Warnings</h3>
+          <p class="small">Select one or more, then use the bar below to accept as exceptions. <button type="button" id="selectAllWarnings" class="linkLike btn-small">Select all</button></p>
+          <ul id="warningsList" class="list warnList"></ul>
+        </div>
+
+        <div id="bulkExceptionBar" class="bulkExceptionBar" style="display:none;">
+          <div class="bulkExceptionBarInner">
+            <span id="bulkExceptionCount" class="bulkExceptionCount">0 selected</span>
+            <label>Your name <input type="text" id="bulkExceptionAcceptedBy" placeholder="e.g. Jane Smith" class="bulkExceptionInput" /></label>
+            <input type="password" id="bulkExceptionPasscode" placeholder="Admin passcode (if required)" class="bulkExceptionPasscode" style="display:none;" />
+            <button type="button" id="bulkExceptionAccept" class="btn btn-primary btn-small">Accept selected as exceptions</button>
+            <button type="button" id="bulkExceptionClear" class="btn btn-secondary btn-small">Clear selection</button>
+          </div>
+          <p id="bulkExceptionStatus" class="bulkExceptionStatus" style="display:none;"></p>
+        </div>
+
+        <div id="exceptionsSection" class="section" style="display:none;">
+          <h3 class="sectionTitle">Accepted exceptions</h3>
+          <p class="small">Findings you accepted as exceptions no longer count against the score.</p>
+          <ul id="exceptionsList" class="list exceptionsList"></ul>
+        </div>
+
+        <div id="noData" class="noData">
+          No validation run yet. Click <strong>Run Validation</strong> (after importing a bundle).
+        </div>
+        <div id="demoViewBanner" class="demoViewBanner" style="display:none;">
+          <span id="demoViewBannerText"></span> <button type="button" id="btnShowFullValidation" class="btn-small linkLike">Show full results</button>
+        </div>
+        <div class="validationDemoTriggers">
+          <button type="button" id="validationDemoTrigger" class="validationDemoTrigger" title="Demo view (subset)">Demo</button>
+          <button type="button" id="validationDemo100Trigger" class="validationDemoTrigger" title="Show 100% for presentation">100%</button>
+        </div>
+      </div>
+
+      <div id="validationFixModal" class="validationFixModal" role="dialog" aria-labelledby="validationFixModalTitle" aria-hidden="true">
+        <div class="validationFixModalBackdrop"></div>
+        <div class="validationFixModalPanel">
+          <h3 id="validationFixModalTitle" class="validationFixModalTitle"></h3>
+          <p id="validationFixModalMessage" class="validationFixModalMessage"></p>
+          <div class="validationFixModalSection">
+            <strong>Resolve in the tool</strong>
+            <ol id="validationFixModalSteps" class="validationFixSteps"></ol>
+          </div>
+          <div id="validationFixModalEdit" class="validationFixModalSection validationFixModalEdit" style="display:none;">
+            <strong>Fix here (IO List)</strong>
+            <p class="validationFixModalEditHint">Update this tag below and re-run validation.</p>
+            <div class="validationFixModalEditRow">
+              <label>Tag <input type="text" id="validationFixModalTag" placeholder="e.g. C-001" /></label>
+              <label>IO type
+                <select id="validationFixModalIoType">
+                  <option value="DI">DI</option>
+                  <option value="DO">DO</option>
+                  <option value="AI">AI</option>
+                  <option value="AO">AO</option>
+                </select>
+              </label>
+              <button type="button" id="validationFixModalApply" class="btn btn-primary btn-small">Apply & re-validate</button>
+            </div>
+            <p id="validationFixModalEditStatus" class="validationFixModalEditStatus" style="display:none;"></p>
+          </div>
+          <div id="validationFixModalException" class="validationFixModalSection validationFixModalException" style="display:none;">
+            <strong>Accept as exception</strong>
+            <p class="validationFixModalExceptionHint">This finding is intentional or will be handled elsewhere. Your name is recorded for traceability and included in the audit trail and commissioning packet.</p>
+            <div class="validationFixModalExceptionRow">
+              <label>Your name <input type="text" id="validationFixModalAcceptedBy" placeholder="e.g. Jane Smith" class="validationFixModalAcceptedBy" required /></label>
+              <input type="password" id="validationFixModalPasscode" placeholder="Admin passcode (if required)" class="validationFixModalPasscode" />
+              <button type="button" id="validationFixModalAcceptException" class="btn btn-primary btn-small">Accept as exception</button>
+            </div>
+            <p id="validationFixModalExceptionStatus" class="validationFixModalEditStatus" style="display:none;"></p>
+          </div>
+          <div class="validationFixModalActions">
+            <button type="button" id="validationFixModalClose" class="btn btn-primary">Close</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="validation.js"></script>
+  </body>
+</html>

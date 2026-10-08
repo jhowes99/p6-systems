@@ -1,0 +1,48 @@
+{
+  "instruments": [
+    {
+      "tag": "PT-101",
+      "type": "pressure_transmitter",
+      "range": [0, 100],
+      "unit": "psi",
+      "description": "Tank pressure sensor"
+    },
+    {
+      "tag": "LT-101",
+      "type": "level_transmitter",
+      "range": [0, 200],
+      "unit": "cm",
+      "description": "Tank level sensor"
+    }
+  ],
+  "valves": [
+    {
+      "tag": "XV-101",
+      "type": "on_off",
+      "normally": "closed",
+      "description": "Main isolation valve"
+    },
+    {
+      "tag": "LV-101",
+      "type": "control",
+      "description": "Level control valve"
+    }
+  ],
+  "pumps": [
+    {
+      "tag": "P-101",
+      "interlock": "PT-101",
+      "description": "Main transfer pump"
+    }
+  ],
+  "control_loops": [
+    {
+      "tag": "LC-101",
+      "sensor": "LT-101",
+      "actuator": "LV-101",
+      "setpoint": 50,
+      "type": "pid",
+      "description": "Tank level control loop"
+    }
+  ]
+}

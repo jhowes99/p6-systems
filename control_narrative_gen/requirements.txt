@@ -1,0 +1,12 @@
+# PDF text extraction (prefer pdfplumber; fallback PyMuPDF for PNG export)
+pdfplumber>=0.10.0
+pymupdf>=1.23.0
+
+# CSV / data
+pandas>=2.0.0
+
+# DOCX export
+python-docx>=1.0.0
+
+# Optional PDF export (narrative as PDF)
+reportlab>=4.0.0

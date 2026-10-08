@@ -1,0 +1,16 @@
+{
+  "props": {
+    "title": "P6 Water Transfer",
+    "locale": "",
+    "projectLocale": "",
+    "gatewayTimezone": "",
+    "sessionTimezone": "",
+    "symbolLibrary": ""
+  },
+  "custom": {
+    "p6OpcConnection": "P6_Runtime",
+    "p6Project": "WaterTransferSystem",
+    "disclaimer": "Simulated E-stop status only — not a certified safety HMI."
+  },
+  "param": {}
+}

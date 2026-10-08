@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>HMI Builder — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="hmi.css" />
+  </head>
+  <body data-app-active="hmi">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <div class="hmiTop">
+        <div>
+          <h1 style="margin:0;">HMI Builder</h1>
+          <div class="small">
+            Visual representation of interlocks and system overview. Create faceplates for testing and commissioning.
+          </div>
+        </div>
+        <div class="small" id="scanInfo"></div>
+      </div>
+
+      <div class="hmiLayout">
+        <aside class="card hmiSidebar">
+          <h2 style="margin:0 0 10px 0;">Interlock Overview</h2>
+          <div class="small" style="margin-bottom: 12px;">
+            Visual representation of all outputs and their permissives.
+          </div>
+          <div id="interlockView" class="interlockView"></div>
+        </aside>
+
+        <section class="card hmiMain">
+          <div class="hmiTabs">
+            <button class="hmiTab active" data-tab="overview">System Overview</button>
+            <button class="hmiTab" data-tab="faceplates">Faceplates</button>
+            <button class="hmiTab" data-tab="export">Export</button>
+          </div>
+
+          <div id="tabOverview" class="tabContent active">
+            <h2 style="margin:0 0 10px 0;">System Overview</h2>
+            <div class="small" style="margin-bottom: 12px;">
+              Overall view of all devices, inputs, and outputs in the system.
+            </div>
+            <div id="systemOverview" class="systemOverview"></div>
+          </div>
+
+          <div id="tabFaceplates" class="tabContent">
+            <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 12px;">
+              <h2 style="margin:0;">Faceplates</h2>
+              <button class="btn" id="btnNewFaceplate">+ New Faceplate</button>
+            </div>
+            <div class="small" style="margin-bottom: 12px;">
+              Create visual faceplates for devices. Drag and drop elements to build your HMI screens.
+            </div>
+            <div id="faceplateList" class="faceplateList"></div>
+            <div id="faceplateEditor" class="faceplateEditor" style="display:none;">
+              <div class="editorHeader">
+                <input type="text" id="faceplateName" placeholder="Faceplate name" class="input" />
+                <button class="btn secondary" id="btnSaveFaceplate">Save</button>
+                <button class="btn secondary" id="btnCancelFaceplate">Cancel</button>
+              </div>
+              <div id="faceplateCanvas" class="faceplateCanvas"></div>
+            </div>
+          </div>
+
+          <div id="tabExport" class="tabContent">
+            <h2 style="margin:0 0 10px 0;">Export HMI</h2>
+            <div class="small" style="margin-bottom: 12px;">
+              Export your HMI configuration to various platforms for deployment.
+            </div>
+            <div class="exportOptions">
+              <div class="card">
+                <h3 style="margin:0 0 8px 0;">Export Formats</h3>
+                <div class="row" style="margin-top: 10px;">
+                  <button class="btn secondary" id="btnExportJSON">JSON Config</button>
+                  <button class="btn secondary" id="btnExportHTML">HTML Preview</button>
+                  <button class="btn secondary" id="btnExportSVG">SVG Graphics</button>
+                </div>
+                <div class="small" style="margin-top: 10px;">
+                  Export formats can be imported into most HMI platforms (Ignition, WinCC, FactoryTalk, etc.)
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script src="hmi.js"></script>
+  </body>
+</html>

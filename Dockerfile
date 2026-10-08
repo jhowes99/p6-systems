@@ -1,4 +1,10 @@
+# P6 Systems application image (Studio UI + API + Runtime + document processing)
+# Internal package layout may still use legacy axiom_* names (ADR-004).
 FROM node:20-alpine
+
+LABEL org.opencontainers.image.title="P6 Systems App" \
+      org.opencontainers.image.description="P6 Studio/Runtime/Verify monolith" \
+      org.opencontainers.image.vendor="P6 Systems"
 
 WORKDIR /app
 

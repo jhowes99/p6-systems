@@ -1,0 +1,11 @@
+P&ID excerpt — Water Transfer System (OCR smoke fixture)
+
+Equipment tags visible on drawing:
+  P-101   Centrifugal transfer pump
+  M-101   Pump motor
+  XV-101  Discharge isolation valve
+  TANK-101 Source tank
+  LSH-101 High level switch
+  ESTOP-101 Emergency stop input
+
+Notes: Candidates from OCR require engineer review before promote.

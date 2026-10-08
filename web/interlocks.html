@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Interlocks — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <link rel="stylesheet" href="interlocks.css" />
+  </head>
+  <body data-app-active="interlocks">
+    <div id="appShell"></div>
+
+    <main class="wrap page">
+      <div class="page-header">
+        <div class="page-breadcrumb">Interlocks</div>
+        <h1 class="page-title">Interlocks</h1>
+        <p class="page-subtitle">Click an output to see permissives, trips, and safety chain state.</p>
+      </div>
+
+      <div id="emptyStateInterlocks" class="empty-state" style="display:none;">
+        <p>No project loaded. Go to Import to load a bundle.</p>
+        <a href="/pid_import.html" class="btn btn-primary">Import Bundle</a>
+      </div>
+
+      <div id="interlocksContent">
+      <div class="rowTop" style="margin-bottom:10px;">
+        <div class="small" id="scanInfo"></div>
+      </div>
+      <div class="layout">
+        <aside class="card left">
+          <div class="row">
+            <strong>Outputs</strong>
+            <span class="small">Click to explain</span>
+          </div>
+          <div id="outList" class="outList"></div>
+        </aside>
+
+        <section class="card right">
+          <div class="row">
+            <strong id="selTitle">Select an output</strong>
+            <span class="small" id="selMeta"></span>
+          </div>
+
+          <div class="section">
+            <div class="secTitle">Summary</div>
+            <pre id="summary" class="pre"></pre>
+          </div>
+
+          <div class="section">
+            <div class="secTitle">Required permissives (missing)</div>
+            <div id="perms" class="chips"></div>
+          </div>
+
+          <div class="section">
+            <div class="secTitle">Active trips (blocking)</div>
+            <div id="trips" class="chips"></div>
+          </div>
+
+          <div class="section">
+            <div class="secTitle">Safety chain</div>
+            <div id="safety" class="chips"></div>
+          </div>
+
+          <div class="section">
+            <div class="secTitle">Reason tree</div>
+            <div id="reasonTree" class="reasonTree"></div>
+          </div>
+
+          <div class="section">
+            <div class="secTitle">Writer rungs</div>
+            <div id="writers" class="writers"></div>
+          </div>
+        </section>
+      </div>
+      </div>
+    </main>
+
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="interlocks.js"></script>
+  </body>
+</html>
+

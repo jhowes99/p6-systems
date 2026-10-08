@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>FAT/SAT Tests — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <link rel="stylesheet" href="tests.css" />
+  </head>
+  <body data-app-active="tests">
+    <div id="appShell"></div>
+
+    <main class="wrap page">
+      <div class="page-header">
+        <div class="page-breadcrumb">Tests</div>
+        <h1 class="page-title">FAT/SAT Tests</h1>
+        <p class="page-subtitle">Generate tests from Cause&Effect, run against loaded IR, export results.</p>
+      </div>
+
+      <div id="emptyStateTests" class="empty-state" style="display:none;">
+        <p>No project loaded. Go to Import to load a bundle.</p>
+        <a href="/pid_import.html" class="btn btn-primary">Import Bundle</a>
+      </div>
+
+      <div id="testsContent">
+      <div class="card">
+        <div class="row">
+          <button class="btn secondary" id="btnSyncCE" title="Derive cause and effect tags from current ladder logic so tests match the program">Sync C&E from logic</button>
+          <button class="btn" id="btnGenerate">Generate from C&E</button>
+          <button class="btn secondary" id="btnRun" disabled>Run Tests</button>
+          <button class="btn secondary" id="btnExport" disabled>Export CSV</button>
+        </div>
+        <div id="rerunRow" class="row rerunRow" style="display:none; margin-top: 10px;">
+          <button class="btn secondary" id="btnRerunAll">Re-run Tests</button>
+          <button class="btn secondary" id="btnRerunFailed" style="display:none;">Re-run Failed Only</button>
+        </div>
+        <p class="small">Import a project bundle first (P&ID + IO List + Cause&Effect) and upload to PLC. Use <strong>Sync C&E from logic</strong> to auto-fill cause/effect from the ladder, then Generate and Run. Orphan/placeholder rules are skipped when generating tests.</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 10px 0;">Results</h3>
+        <div id="summary" class="summary"></div>
+        <table class="resultsTable" id="resultsTable">
+          <thead>
+            <tr><th>Test</th><th>Pass/Fail</th><th>Failures</th><th></th></tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+        <div id="detailDrawer" class="detailDrawer" style="display:none;">
+          <h4 id="detailTitle"></h4>
+          <div id="detailFixGuide" class="detailFixGuide" style="display:none;"></div>
+          <div class="detailActions">
+            <button class="btn btn-primary" id="btnFixInApp" style="display:none;">Fix in app</button>
+            <button class="btn secondary" id="btnRerunThis" style="display:none;">Re-run this test</button>
+            <button class="btn secondary" id="btnCloseDetail">Close</button>
+          </div>
+          <div id="detailContent" class="detailContent"></div>
+        </div>
+      </div>
+      </div>
+
+      <div id="testsFixModal" class="testsFixModal" role="dialog" aria-labelledby="testsFixModalTitle" aria-hidden="true">
+        <div class="testsFixModalBackdrop"></div>
+        <div class="testsFixModalPanel">
+          <h3 id="testsFixModalTitle" class="testsFixModalTitle"></h3>
+          <p id="testsFixModalMessage" class="testsFixModalMessage"></p>
+          <div class="testsFixModalSection">
+            <strong>Things to check</strong>
+            <ol id="testsFixModalSteps" class="testsFixModalSteps"></ol>
+          </div>
+          <div id="testsFixModalCE" class="testsFixModalSection testsFixModalCE" style="display:none;">
+            <strong>Fix here (C&amp;E list)</strong>
+            <p class="testsFixModalEditHint">Edit the Cause &amp; Effect rule for this test. Use comma-separated tags. Then apply and re-run.</p>
+            <div class="testsFixModalEditRow">
+              <label>Causes (tags) <input type="text" id="testsFixModalCauses" placeholder="e.g. DI1, DI2" /></label>
+              <label>Effects (tags) <input type="text" id="testsFixModalEffects" placeholder="e.g. Q0, Q1" /></label>
+              <button type="button" id="testsFixModalApplyCE" class="btn btn-primary btn-small">Apply C&amp;E &amp; re-run this test</button>
+            </div>
+            <p id="testsFixModalCEStatus" class="testsFixModalEditStatus" style="display:none;"></p>
+          </div>
+          <div class="testsFixModalActions">
+            <button type="button" id="testsFixModalClose" class="btn btn-primary">Close</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="tests.js"></script>
+  </body>
+</html>

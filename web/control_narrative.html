@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Logic to Control Narrative — Axiom Verify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <style>
+      .workflow-card {
+        border: 1px solid rgba(15,23,42,.12);
+        border-radius: 14px;
+        padding: 20px;
+        background: rgba(255,255,255,.95);
+        margin-top: 16px;
+      }
+      .workflow-card h2 { margin-top: 0; font-size: 18px; }
+      .step-list { margin: 12px 0 0 18px; padding: 0; }
+      .step-list li { margin-bottom: 8px; }
+      .inputs-out {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 16px;
+      }
+      @media (max-width: 700px) { .inputs-out { grid-template-columns: 1fr; } }
+      .io-box {
+        border: 1px dashed rgba(15,23,42,.2);
+        border-radius: 10px;
+        padding: 14px;
+        background: rgba(248,250,252,.8);
+      }
+      .io-box h3 { margin: 0 0 8px 0; font-size: 14px; }
+      .narrative-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+      .narrative-actions .btn { padding: 10px 16px; }
+      .section-note {
+        margin-top: 20px;
+        padding: 14px;
+        border-radius: 10px;
+        background: rgba(37,99,235,.06);
+        border: 1px solid rgba(37,99,235,.2);
+        font-size: 13px;
+      }
+      .narrative-form { display: flex; flex-direction: column; gap: 14px; }
+      .form-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+      .form-row label { min-width: 140px; font-size: 13px; }
+      .form-row input[type="file"] { max-width: 320px; }
+      .form-row input[type="text"] { flex: 1; min-width: 200px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(15,23,42,.2); }
+      .file-name { font-size: 12px; color: rgba(15,23,42,.6); }
+      .narrative-status {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        font-size: 13px;
+      }
+      .narrative-status--busy { background: rgba(37,99,235,.08); border: 1px solid rgba(37,99,235,.25); color: #1e40af; }
+      .narrative-status--success { background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.3); color: #15803d; }
+      .narrative-status--error { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); color: #b91c1c; }
+      .narrative-status a { color: #1d4ed8; text-decoration: underline; }
+      .narrative-status code { font-size: 12px; padding: 2px 6px; background: rgba(0,0,0,.06); border-radius: 4px; }
+      .narrative-downloads { margin-top: 16px; }
+      .narrative-downloads h3 { margin: 0 0 8px 0; font-size: 14px; }
+      .server-banner {
+        margin-bottom: 16px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        background: rgba(239,68,68,.1);
+        border: 1px solid rgba(239,68,68,.35);
+        color: #b91c1c;
+        font-size: 13px;
+      }
+      .server-banner a { color: #1d4ed8; text-decoration: underline; }
+      .server-banner code { font-size: 12px; padding: 2px 6px; background: rgba(0,0,0,.08); border-radius: 4px; }
+    </style>
+  </head>
+  <body data-app-active="narrative">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <div id="serverBanner" class="server-banner" style="display:none;" aria-live="polite"></div>
+      <h1 style="margin:0;">📄 Logic to Control Narrative</h1>
+      <p class="small" style="margin-top:8px;">Import your <strong>Logic/functional diagrams</strong> PDF and get the full control narrative (Markdown, DOCX, PDF), tag dictionary, cause-effect table, and diagram exports.</p>
+
+      <div class="workflow-card">
+        <h2>Import Logic/functional diagrams</h2>
+        <p class="small" style="margin:0 0 12px 0;">Upload your logic/functional diagrams PDF (e.g. Steam Pressure, Fuel Gas, Oxygen Trim, Furnace Pressure, Drum Level). Optionally add a control narrative template PDF for target structure.</p>
+        <form id="narrativeForm" class="narrative-form">
+          <div class="form-row">
+            <label>Logic/functional diagrams <span style="color:var(--danger);">*</span></label>
+            <input type="file" id="logicFile" name="logic" accept=".pdf,application/pdf" required />
+            <span class="file-name" id="logicFileName"></span>
+          </div>
+          <div class="form-row">
+            <label>Control narrative template (optional)</label>
+            <input type="file" id="templateFile" name="template" accept=".pdf,application/pdf" />
+            <span class="file-name" id="templateFileName"></span>
+          </div>
+          <div class="form-row">
+            <label>Project name</label>
+            <input type="text" id="projectName" name="project" value="Combustion Control System, Fully Metered" placeholder="Project name" />
+          </div>
+          <div class="form-row">
+            <label>Customer</label>
+            <input type="text" id="customerName" name="customer" value="TotalEnergies Port Arthur, TX." placeholder="Customer" />
+          </div>
+          <div class="narrative-actions">
+            <button type="submit" class="btn" id="btnGenerate">Generate control narrative</button>
+          </div>
+        </form>
+        <div id="narrativeStatus" class="narrative-status" style="display:none;"></div>
+        <div id="narrativeDownloads" class="narrative-downloads" style="display:none;">
+          <h3 style="margin:0 0 8px 0;">Outputs</h3>
+          <p class="small" style="margin:0 0 10px 0;">Download all control narrative outputs:</p>
+          <ul id="downloadList" style="margin:0; padding-left:20px;"></ul>
+        </div>
+      </div>
+
+      <div class="inputs-out">
+        <div class="io-box">
+          <h3>Inputs</h3>
+          <ul style="margin:0; padding-left:18px;">
+            <li><strong>Logic/functional diagrams</strong> — Your logic PDF (Steam Pressure, Fuel Gas, Oxygen Trim, Furnace Pressure, Drum Level, etc.)</li>
+            <li><strong>Control narrative template</strong> (optional) — Example/template PDF for target structure</li>
+          </ul>
+        </div>
+        <div class="io-box">
+          <h3>Outputs</h3>
+          <ul style="margin:0; padding-left:18px;">
+            <li><code>control_narrative.md</code> / <code>.docx</code> / <code>.pdf</code></li>
+            <li><code>tag_dictionary.csv</code> — Tags by loop/page</li>
+            <li><code>cause_effect.csv</code> — Trips, alarms, interlocks</li>
+            <li><code>diagrams/</code> — One PNG per page of logic</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section-note">
+        <strong>Same as P&amp;ID Import:</strong> Upload your logic PDF, click Generate, get the full control narrative suite (MD, DOCX, PDF, tag dictionary, cause-effect, diagrams).
+      </div>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script>
+      (function() {
+        var logicInput = document.getElementById("logicFile");
+        var templateInput = document.getElementById("templateFile");
+        var logicNameEl = document.getElementById("logicFileName");
+        var templateNameEl = document.getElementById("templateFileName");
+        var form = document.getElementById("narrativeForm");
+        var btn = document.getElementById("btnGenerate");
+        var statusEl = document.getElementById("narrativeStatus");
+        var downloadsEl = document.getElementById("narrativeDownloads");
+        var listEl = document.getElementById("downloadList");
+        var serverBanner = document.getElementById("serverBanner");
+        var baseUrl = "http://localhost:3000";
+
+        function showServerBanner(reason) {
+          if (!serverBanner) return;
+          var msg = "Use Logic to Control Narrative from within Axiom Verify. ";
+          if (reason === "file") {
+            msg += "Open the app (or go to <a href=\"" + baseUrl + "/pid_import.html\" target=\"_blank\" rel=\"noopener\">Import and Generate</a>), then open the <strong>Logic to Control Narrative</strong> tab. Same flow: pick your PDF, click Generate.";
+          } else {
+            msg += "Go to <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a> and use the form there.";
+          }
+          serverBanner.innerHTML = msg;
+          serverBanner.style.display = "block";
+        }
+
+        function hideServerBanner() {
+          if (serverBanner) serverBanner.style.display = "none";
+        }
+
+        (function checkServer() {
+          if (typeof window === "undefined" || !window.location) return;
+          if (window.location.protocol === "file:") {
+            showServerBanner("file");
+            return;
+          }
+          var url = (window.location.origin || baseUrl).replace(/\/$/, "") + "/api/narrative/status";
+          fetch(url, { method: "GET" }).then(function(r) {
+            if (r.ok) hideServerBanner(); else showServerBanner();
+          }).catch(function() { showServerBanner(); });
+        })();
+
+        if (logicInput) logicInput.addEventListener("change", function() {
+          logicNameEl.textContent = logicInput.files && logicInput.files[0] ? logicInput.files[0].name : "";
+        });
+        if (templateInput) templateInput.addEventListener("change", function() {
+          templateNameEl.textContent = templateInput.files && templateInput.files[0] ? templateInput.files[0].name : "";
+        });
+
+        form.addEventListener("submit", function(e) {
+          e.preventDefault();
+          if (!logicInput.files || !logicInput.files[0]) {
+            statusEl.style.display = "block";
+            statusEl.className = "narrative-status narrative-status--error";
+            statusEl.textContent = "Please select a Logic/functional diagrams PDF.";
+            return;
+          }
+          var fd = new FormData();
+          fd.append("logic", logicInput.files[0]);
+          if (templateInput.files && templateInput.files[0]) fd.append("template", templateInput.files[0]);
+          fd.append("project", document.getElementById("projectName").value || "Combustion Control System, Fully Metered");
+          fd.append("customer", document.getElementById("customerName").value || "TotalEnergies Port Arthur, TX.");
+
+          statusEl.style.display = "block";
+          statusEl.className = "narrative-status narrative-status--busy";
+          statusEl.textContent = "Generating control narrative…";
+          downloadsEl.style.display = "none";
+          listEl.innerHTML = "";
+          btn.disabled = true;
+
+          fetch("/api/narrative/generate", { method: "POST", body: fd })
+            .then(function(r) {
+              if (!r.ok && r.status === 404) {
+                return r.text().then(function(t) {
+                  var isHtml = t && (t.trim().slice(0, 15).toLowerCase().indexOf("<!doctype") !== -1);
+                  var hint = isHtml
+                    ? "SERVER_NOT_RUNNING"
+                    : (t && t.slice(0, 200)) || "Not found (404).";
+                  return { ok: false, status: 404, json: { error: hint, isServerDown: isHtml } };
+                });
+              }
+              return r.json().then(function(j) { return { ok: r.ok, status: r.status, json: j }; });
+            })
+            .then(function(x) {
+              btn.disabled = false;
+              if (x.ok && x.json && x.json.ok && x.json.outputs) {
+                statusEl.className = "narrative-status narrative-status--success";
+                statusEl.textContent = "Done. Download your outputs below.";
+                var base = "/api/narrative/exports/";
+                var expected = ["control_narrative.md", "control_narrative.docx", "control_narrative.pdf", "tag_dictionary.csv", "cause_effect.csv"];
+                var byName = {};
+                (x.json.outputs || []).forEach(function(o) { byName[o.name] = o; });
+                var pdfMissing = !byName["control_narrative.pdf"];
+                var warnings = (x.json.warnings || []);
+                expected.forEach(function(name) {
+                  var o = byName[name];
+                  if (o) {
+                    var a = document.createElement("a");
+                    a.href = base + o.path;
+                    a.download = o.name.split("/").pop() || o.name;
+                    a.textContent = o.name;
+                    a.style.display = "block";
+                    a.style.marginBottom = "6px";
+                    listEl.appendChild(a);
+                  } else {
+                    var span = document.createElement("span");
+                    span.style.display = "block";
+                    span.style.marginBottom = "6px";
+                    span.style.color = "#64748b";
+                    span.textContent = name + " (not generated)";
+                    listEl.appendChild(span);
+                  }
+                });
+                if (pdfMissing && warnings.length) {
+                  var tip = document.createElement("p");
+                  tip.className = "small";
+                  tip.style.marginTop = "10px";
+                  tip.style.color = "#64748b";
+                  tip.textContent = "To generate PDF: install reportlab in the narrative Python environment (e.g. cd control_narrative_gen && pip install -r requirements.txt, or use a .venv there).";
+                  listEl.appendChild(tip);
+                }
+                downloadsEl.style.display = "block";
+              } else {
+                statusEl.className = "narrative-status narrative-status--error";
+                if (x.json && x.json.isServerDown) {
+                  statusEl.innerHTML = "Use Logic to Control Narrative from within Axiom Verify. Open <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a> — same flow, one place.";
+                } else {
+                  statusEl.textContent = (x.json && x.json.error) ? x.json.error : "Generation failed.";
+                }
+                downloadsEl.style.display = "none";
+              }
+            })
+            .catch(function(err) {
+              btn.disabled = false;
+              statusEl.className = "narrative-status narrative-status--error";
+              var msg = err.message || String(err);
+              if (msg.indexOf("<!DOCTYPE") !== -1 || msg.indexOf("is not valid JSON") !== -1) {
+                statusEl.innerHTML = "Use Logic to Control Narrative from within Axiom Verify. Open <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a>.";
+              } else {
+                statusEl.textContent = "Request failed: " + msg;
+              }
+              downloadsEl.style.display = "none";
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

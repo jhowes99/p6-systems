@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Traceability</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body data-app-active="trace">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <h1 style="margin:0;">Engineering Traceability</h1>
+    <p class="small">DOCUMENT → EQUIPMENT → SIGNAL → LOGIC → SIMULATION → TEST → EVIDENCE</p>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+      <input id="tag" placeholder="Signal tag e.g. M101.Energize" style="min-width:240px;" />
+      <button id="btnSig" type="button">Trace signal</button>
+      <button id="btnFat" type="button">Run FAT + trace failures</button>
+    </div>
+    <pre id="out" class="small" style="margin-top:1rem;background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    const out = document.getElementById("out");
+    const params = new URLSearchParams(location.search);
+    if (params.get("tag")) document.getElementById("tag").value = params.get("tag");
+    document.getElementById("btnSig").onclick = async () => {
+      const tag = encodeURIComponent(document.getElementById("tag").value.trim());
+      const r = await fetch("/api/trace/signal/" + tag);
+      out.textContent = JSON.stringify(await r.json(), null, 2);
+    };
+    document.getElementById("btnFat").onclick = async () => {
+      const fat = await fetch("/api/verify/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).then(r => r.json());
+      const tr = await fetch("/api/trace/from-test", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testResult: fat.result, projectId: fat.result?.projectId })
+      }).then(r => r.json());
+      out.textContent = JSON.stringify({ fatPass: fat.pass, trace: tr }, null, 2);
+    };
+    if (params.get("tag")) document.getElementById("btnSig").click();
+  </script>
+</body>
+</html>

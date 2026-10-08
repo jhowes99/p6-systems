@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Reports</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body data-app-active="reports">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <h1 style="margin:0;">Reports Hub</h1>
+    <p class="small">Platform summary, verification, and model exports.</p>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+      <button id="plat" type="button">Platform report</button>
+      <a class="btn" href="/verify.html">FAT / PDF</a>
+      <a class="btn" href="/exports.html">Legacy exports</a>
+    </div>
+    <pre id="out" class="small" style="margin-top:1rem;background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    document.getElementById("plat").onclick = async () => {
+      document.getElementById("out").textContent = JSON.stringify(await (await fetch("/api/reports/platform")).json(), null, 2);
+    };
+    document.getElementById("plat").click();
+  </script>
+</body>
+</html>

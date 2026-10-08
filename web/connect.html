@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Connect</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body data-app-active="connect">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <div class="card">
+      <h1 style="margin:0;">P6 Connect</h1>
+      <p class="small">Industrial connectivity. Ignition is optional — core Runtime does not require it.</p>
+      <div id="status" class="small" style="margin-top:1rem;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;">
+        <div>
+          <h3 style="margin:0 0 0.35rem;">OPC UA</h3>
+          <pre id="opcua" class="small" style="background:#f6f8f7;padding:0.75rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
+        </div>
+        <div>
+          <h3 style="margin:0 0 0.35rem;">MQTT (JSON, not Sparkplug)</h3>
+          <pre id="mqtt" class="small" style="background:#f6f8f7;padding:0.75rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
+        </div>
+      </div>
+      <ul class="small">
+        <li><b>MODE 1 — SIMULATION</b> (default): P6 executes logic; Ignition may observe via OPC UA.</li>
+        <li><b>MODE 2 — EXTERNAL TEST</b>: reserved / gated.</li>
+        <li><b>MODE 3 — LIVE INTEGRATION</b>: disabled by default.</li>
+      </ul>
+      <p class="small">
+        Perspective template (Ignition 8.3): <code>ignition/perspective/P6_WaterTransfer/</code>
+        — see README in that folder. Tag map UI: <a href="/tags.html">/tags.html</a>.
+        OCR ingest: <a href="/ingest.html">/ingest.html</a>.
+      </p>
+    </div>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    Promise.all([
+      fetch("/api/connect/status").then(r => r.json()),
+      fetch("/api/connect/opcua").then(r => r.json()),
+      fetch("/api/connect/mqtt").then(r => r.json())
+    ]).then(([status, opcua, mqtt]) => {
+      document.getElementById("status").textContent = JSON.stringify(status, null, 2);
+      document.getElementById("opcua").textContent = JSON.stringify(opcua, null, 2);
+      document.getElementById("mqtt").textContent = JSON.stringify(mqtt, null, 2);
+    }).catch(e => {
+      document.getElementById("status").textContent = String(e);
+    });
+  </script>
+</body>
+</html>
