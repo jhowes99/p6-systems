@@ -1,10 +1,10 @@
 @echo off
-title Axiom Verify - Install
+title P6 Systems - Install
 setlocal
 
 echo.
 echo  ============================================
-echo   Axiom Verify - One-time setup
+echo   P6 Systems - One-time setup
 echo  ============================================
 echo.
 
@@ -49,11 +49,11 @@ echo.
 echo  Creating START.bat...
 (
 echo @echo off
-echo title Axiom Verify
+echo title P6 Systems
 echo set "ROOT=%%~dp0"
 echo set "ROOT=%%ROOT:~0,-1%%"
 echo echo.
-echo echo  Starting Axiom Verify...
+echo echo  Starting P6 Systems...
 echo echo  Open in browser: http://localhost:3000
 echo echo  Press Ctrl+C to stop the server.
 echo echo.

@@ -2,94 +2,338 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>P6 Document Ingest / OCR</title>
+  <title>P6 Document Ingest / Review</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="site.css" />
   <link rel="stylesheet" href="app_shell.css" />
   <link rel="stylesheet" href="ui.css" />
   <style>
-    .cand { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto; gap: 0.5rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid #eee; font-family: ui-monospace, monospace; font-size: 0.8rem; }
-    .cand head, .cand-h { font-weight: 700; }
+    .reviewGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+      min-height: 420px;
+    }
+    @media (max-width: 900px) {
+      .reviewGrid { grid-template-columns: 1fr; }
+    }
+    .pane {
+      border: 1px solid #d5dde5;
+      background: #fff;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .paneHead {
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid #e4ebf1;
+      font-weight: 700;
+      font-size: 0.9rem;
+      background: #f6f9fb;
+    }
+    .paneBody {
+      padding: 0.75rem;
+      overflow: auto;
+      flex: 1;
+      min-height: 320px;
+    }
+    #sourceView {
+      white-space: pre-wrap;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      margin: 0;
+    }
+    #sourceView mark {
+      background: #ffe08a;
+      color: inherit;
+      padding: 0 0.1em;
+      border-radius: 2px;
+    }
+    #sourceView mark.active {
+      background: #168FF0;
+      color: #fff;
+    }
+    #previewImg {
+      max-width: 100%;
+      height: auto;
+      display: none;
+      border: 1px solid #e4ebf1;
+    }
+    .cand {
+      display: grid;
+      grid-template-columns: auto 1.1fr 1fr 0.7fr auto;
+      gap: 0.4rem;
+      align-items: center;
+      padding: 0.4rem 0.35rem;
+      border-bottom: 1px solid #eee;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .cand:hover { background: #f4f8fb; }
+    .cand.selected { background: #e8f4ff; outline: 1px solid #b7d9f5; }
+    .cand input[type="text"],
+    .cand select {
+      width: 100%;
+      font: inherit;
+      border: 1px solid #ccd6df;
+      border-radius: 4px;
+      padding: 0.2rem 0.3rem;
+    }
+    .cand-h { font-weight: 700; cursor: default; }
+    .cand-h:hover { background: transparent; }
     .conf { color: #666; }
     .warn { color: #7a4b00; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.65rem; }
+    .detailBox {
+      margin-top: 0.75rem;
+      padding: 0.65rem;
+      border: 1px solid #e4ebf1;
+      border-radius: 6px;
+      background: #fafcfd;
+      font-size: 0.8rem;
+    }
+    .statusRow { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      background: #eef3f7;
+      color: #334;
+    }
+    .chip.proposed { background: #fff4d6; }
+    .chip.confirmed { background: #dff7e6; }
+    .chip.missing { background: #fde2e2; }
   </style>
 </head>
 <body data-app-active="ingest">
   <div id="appShell"></div>
   <main class="wrap">
-    <h1 style="margin:0;">Document Ingestion &amp; OCR</h1>
-    <p class="small">PDF text extract + image OCR (tesseract). Candidates stay <b>ENGINEERING_INFERENCE</b> until you check and promote them.</p>
+    <h1 style="margin:0;">Document ingestion &amp; review</h1>
+    <p class="small">Part 5 — original source on the left, extracted candidates on the right. Candidates stay <b>ENGINEERING_INFERENCE</b> until you confirm and promote. No silent verified connections.</p>
+    <p class="small" style="margin-top:0.5rem;padding:0.65rem 0.75rem;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;color:#78350f;">
+      <b>LIMIT:</b> Prefer text / searchable PDF / CSV. Scanned image OCR is unfinished — empty or low-confidence tags are expected; never treat OCR as verified engineering data.
+    </p>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-      <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.csv,image/*,application/pdf" />
+      <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.csv,image/*,application/pdf,text/plain,.txt" />
       <button id="go" type="button">Extract / OCR</button>
       <button id="selectAll" type="button">Select all</button>
-      <button id="promote" type="button" disabled>Promote selected</button>
+      <button id="promote" type="button" disabled>Promote confirmed</button>
       <label class="small"><input type="checkbox" id="approve" /> Mark ENGINEER_APPROVED on promote</label>
+      <a class="small" href="/studio.html?wizard=1">Open Studio wizard</a>
     </div>
-    <p id="meta" class="small"></p>
+    <div class="statusRow">
+      <span class="chip" id="metaChip">No extract yet</span>
+      <span class="chip proposed" id="proposedChip">Proposed: 0</span>
+      <span class="chip confirmed" id="confirmedChip">Confirmed: 0</span>
+      <span class="chip missing" id="missingChip">Source region: n/a until bbox OCR</span>
+    </div>
     <p id="warn" class="small warn"></p>
-    <div id="list"></div>
+
+    <div class="reviewGrid">
+      <section class="pane">
+        <div class="paneHead">Source drawing / text</div>
+        <div class="paneBody">
+          <img id="previewImg" alt="Uploaded drawing preview" />
+          <pre id="sourceView">(Upload a PDF, PNG, JPEG, CSV, or text excerpt to extract.)</pre>
+        </div>
+      </section>
+      <section class="pane">
+        <div class="paneHead">Extracted model candidates</div>
+        <div class="paneBody">
+          <div id="list"></div>
+          <div class="detailBox" id="detail">
+            Select a candidate to highlight its tag in the source text. Rename, reclassify, confirm, or delete before promote.
+          </div>
+          <div class="actions">
+            <button type="button" id="btnConfirm" disabled>Confirm</button>
+            <button type="button" id="btnDelete" disabled>Delete</button>
+            <button type="button" id="btnAdd" disabled>Add missing</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <details style="margin-top:1rem;">
-      <summary class="small">Raw extract</summary>
-      <pre id="raw" class="small" style="background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;max-height:240px;overflow:auto;"></pre>
+      <summary class="small">Promote / API response</summary>
+      <pre id="out" class="small" style="background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
     </details>
-    <pre id="out" class="small" style="margin-top:1rem;background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
   </main>
   <script src="ui.js"></script>
   <script src="app_shell.js"></script>
   <script>
     let last = null;
+    let candidates = [];
+    let selectedIdx = -1;
+    let objectUrl = null;
     const list = document.getElementById("list");
     const out = document.getElementById("out");
+    const sourceView = document.getElementById("sourceView");
+    const previewImg = document.getElementById("previewImg");
 
-    function renderCandidates(cands) {
-      list.innerHTML = `<div class="cand cand-h"><span></span><span>Tag</span><span>Type</span><span>Confidence</span><span>Include</span></div>`;
-      (cands || []).forEach((c, i) => {
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = String(s ?? "");
+      return d.innerHTML;
+    }
+
+    function updateChips() {
+      const proposed = candidates.filter((c) => c.status !== "confirmed" && c.status !== "deleted").length;
+      const confirmed = candidates.filter((c) => c.status === "confirmed").length;
+      document.getElementById("proposedChip").textContent = `Proposed: ${proposed}`;
+      document.getElementById("confirmedChip").textContent = `Confirmed: ${confirmed}`;
+      document.getElementById("promote").disabled = !candidates.some((c) => c.status === "confirmed" || c.include);
+    }
+
+    function renderSource(activeTag) {
+      const text = last?.extracted?.text || "";
+      if (!text) {
+        sourceView.textContent = "(No extracted text — image-only OCR may still list candidates.)";
+        return;
+      }
+      if (!activeTag) {
+        sourceView.textContent = text;
+        return;
+      }
+      const re = new RegExp(activeTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      sourceView.innerHTML = escapeHtml(text).replace(re, (m) => `<mark class="active">${escapeHtml(m)}</mark>`);
+      const mark = sourceView.querySelector("mark.active");
+      if (mark) mark.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    function renderList() {
+      list.innerHTML = `<div class="cand cand-h"><span></span><span>Tag</span><span>Type</span><span>Conf</span><span>Incl</span></div>`;
+      candidates.forEach((c, i) => {
+        if (c.status === "deleted") return;
         const row = document.createElement("div");
-        row.className = "cand";
-        row.innerHTML = `<span>${i + 1}</span><span>${c.tag}</span><span>${c.type}</span><span class="conf">${Math.round((c.confidence || 0) * 100)}%</span>`;
+        row.className = "cand" + (i === selectedIdx ? " selected" : "");
+        row.innerHTML = `
+          <span>${i + 1}</span>
+          <input type="text" data-field="tag" data-idx="${i}" value="${escapeHtml(c.tag)}" />
+          <select data-field="type" data-idx="${i}">
+            ${["pump","motor","valve","tank","level_switch","level_transmitter","pressure_transmitter","flow_transmitter","emergency_stop_input","sensor","other"]
+              .map((t) => `<option value="${t}" ${c.type === t ? "selected" : ""}>${t}</option>`).join("")}
+          </select>
+          <span class="conf">${Math.round((c.confidence || 0) * 100)}%${c.status === "confirmed" ? " ✓" : ""}</span>`;
         const cb = document.createElement("input");
         cb.type = "checkbox";
-        cb.dataset.idx = String(i);
-        cb.checked = (c.confidence || 0) >= 0.5;
+        cb.checked = !!c.include || c.status === "confirmed";
+        cb.onclick = (e) => {
+          e.stopPropagation();
+          c.include = cb.checked;
+          if (cb.checked) c.status = "confirmed";
+          updateChips();
+        };
         row.appendChild(cb);
+        row.onclick = () => {
+          selectedIdx = i;
+          renderList();
+          renderSource(c.tag);
+          document.getElementById("detail").innerHTML =
+            `<b>${escapeHtml(c.tag)}</b> · ${escapeHtml(c.type)}<br>` +
+            `Status: ${escapeHtml(c.status || "proposed")} · confidence ${Math.round((c.confidence || 0) * 100)}%<br>` +
+            `Provenance: ${escapeHtml(c.source || "ocr_mine")} · dataClass ${escapeHtml(c.dataClass || "ENGINEERING_INFERENCE")}<br>` +
+            `Source position: ${c.sourcePosition ? escapeHtml(JSON.stringify(c.sourcePosition)) : "<i>not provided by current OCR engine (text highlight used)</i>"}`;
+          document.getElementById("btnConfirm").disabled = false;
+          document.getElementById("btnDelete").disabled = false;
+        };
         list.appendChild(row);
       });
-      document.getElementById("promote").disabled = !(cands || []).length;
+      list.querySelectorAll("[data-field]").forEach((el) => {
+        el.onclick = (e) => e.stopPropagation();
+        el.onchange = () => {
+          const i = Number(el.dataset.idx);
+          candidates[i][el.dataset.field] = el.value;
+          if (i === selectedIdx) renderSource(candidates[i].tag);
+        };
+      });
+      updateChips();
     }
 
     document.getElementById("go").onclick = async () => {
       const f = document.getElementById("file").files[0];
-      if (!f) return alert("Choose a PDF, PNG, JPEG, or CSV");
+      if (!f) return alert("Choose a PDF, PNG, JPEG, CSV, or text file");
       out.textContent = "Running OCR / extract…";
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+      if (/^image\//.test(f.type)) {
+        objectUrl = URL.createObjectURL(f);
+        previewImg.src = objectUrl;
+        previewImg.style.display = "block";
+      } else {
+        previewImg.removeAttribute("src");
+        previewImg.style.display = "none";
+      }
       const fd = new FormData();
       fd.append("file", f);
       const r = await fetch("/api/ingest/ocr", { method: "POST", body: fd });
       last = await r.json();
       const ex = last.extracted || {};
-      document.getElementById("meta").textContent =
-        `engine=${ex.engine || "?"} confidence=${ex.confidence != null ? Math.round(ex.confidence * 100) + "%" : "n/a"} candidates=${(last.candidates || []).length}`;
+      document.getElementById("metaChip").textContent =
+        `engine=${ex.engine || "?"} · confidence=${ex.confidence != null ? Math.round(ex.confidence * 100) + "%" : "n/a"} · candidates=${(last.candidates || []).length}`;
       document.getElementById("warn").textContent = ex.warning || last.error || "";
-      document.getElementById("raw").textContent = ex.text || "(empty)";
-      renderCandidates(last.candidates || []);
-      out.textContent = last.ok === false ? JSON.stringify(last, null, 2) : "Review candidates above, then promote.";
+      candidates = (last.candidates || []).map((c) => ({
+        ...c,
+        status: "proposed",
+        include: (c.confidence || 0) >= 0.5
+      }));
+      selectedIdx = -1;
+      renderSource(null);
+      renderList();
+      document.getElementById("btnAdd").disabled = false;
+      out.textContent = last.ok === false ? JSON.stringify(last, null, 2) : "Review left/right, confirm candidates, then promote.";
     };
 
     document.getElementById("selectAll").onclick = () => {
-      list.querySelectorAll('input[type=checkbox]').forEach((cb) => { cb.checked = true; });
+      candidates.forEach((c) => {
+        if (c.status === "deleted") return;
+        c.include = true;
+        c.status = "confirmed";
+      });
+      renderList();
+    };
+
+    document.getElementById("btnConfirm").onclick = () => {
+      if (selectedIdx < 0) return;
+      candidates[selectedIdx].status = "confirmed";
+      candidates[selectedIdx].include = true;
+      renderList();
+    };
+    document.getElementById("btnDelete").onclick = () => {
+      if (selectedIdx < 0) return;
+      candidates[selectedIdx].status = "deleted";
+      candidates[selectedIdx].include = false;
+      selectedIdx = -1;
+      renderList();
+      renderSource(null);
+    };
+    document.getElementById("btnAdd").onclick = () => {
+      candidates.push({
+        tag: "NEW-TAG",
+        type: "sensor",
+        confidence: 0.4,
+        dataClass: "ENGINEERING_INFERENCE",
+        source: "manual_add",
+        status: "proposed",
+        include: false
+      });
+      selectedIdx = candidates.length - 1;
+      renderList();
     };
 
     document.getElementById("promote").onclick = async () => {
-      if (!last?.candidates?.length) return;
-      const selected = [];
-      list.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-        if (cb.checked) selected.push(last.candidates[Number(cb.dataset.idx)]);
-      });
-      if (!selected.length) return alert("Select at least one candidate");
+      const selected = candidates.filter((c) => c.status !== "deleted" && (c.include || c.status === "confirmed"));
+      if (!selected.length) return alert("Confirm or include at least one candidate");
       const body = {
         documentName: document.getElementById("file").files[0]?.name,
         format: document.getElementById("file").files[0]?.type,
-        equipment: selected,
+        equipment: selected.map(({ tag, type, confidence, dataClass, source }) => ({
+          tag, type, confidence, dataClass, source
+        })),
         approveAll: document.getElementById("approve").checked
       };
       const r = await fetch("/api/ingest/ocr/promote", {
@@ -97,7 +341,12 @@
         headers: { "Content-Type": "application/json", "X-P6-Role": "engineer" },
         body: JSON.stringify(body)
       });
-      out.textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      out.textContent = JSON.stringify(data, null, 2);
+      if (data.ok) {
+        document.getElementById("warn").textContent =
+          "Promoted into canonical model. Open Studio map to see the engineering graph.";
+      }
     };
   </script>
 </body>

@@ -22,7 +22,7 @@ Download and install from: https://jrsoftware.org/isdl.php
 
 The installer will be in:
 ```
-C:\Work\Ironclad_Runtime\dist\AxiomControl-Setup-1.0.0.exe
+C:\Work\Ironclad_Runtime\dist\P6Systems-Setup-1.0.0.exe
 ```
 
 ## What This Creates

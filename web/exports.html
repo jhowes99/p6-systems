@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Exports — Axiom Verify</title>
+    <title>Exports — P6 Systems</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="site.css" />
     <link rel="stylesheet" href="app_shell.css" />
@@ -60,11 +60,15 @@
         <div class="card section">
           <h2 class="section-title">B) Code Exports</h2>
           <p class="small" style="margin-bottom: 10px;">Export your program to PLC platforms:</p>
+          <p class="small" style="margin-bottom: 10px;padding:0.65rem 0.75rem;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;color:#78350f;">
+            <b>LIMIT:</b> Allen-Bradley download is a <b>placeholder</b> (sample CSVs only) — not a validated vendor import package.
+            Codesys ST / Siemens SCL / Python exports are the supported paths for this MVP.
+          </p>
           <div class="row">
             <button class="btn secondary" id="btnCodesys">Download Codesys ST</button>
             <button class="btn secondary" id="btnSiemens">Download Siemens SCL</button>
             <button class="btn secondary" id="btnPython">Download Python</button>
-            <button class="btn secondary" id="btnAB">Download Allen-Bradley Placeholder</button>
+            <button class="btn secondary" id="btnAB" title="Placeholder only — not a validated AB import">Download Allen-Bradley Placeholder</button>
           </div>
           <div class="small" id="msg" style="margin-top:10px;"></div>
           <pre id="preview" style="margin-top:10px;"></pre>

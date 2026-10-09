@@ -45,8 +45,11 @@ import { enforceSafetyDefaults } from "./plc/safety.js";
 import { createModelRouter } from "./model/routes.js";
 import { initStore } from "./model/store.js";
 import { ensureWaterTransferProject } from "./model/seed_water_transfer.js";
+import { ensureTankTransferDemoProject } from "./model/seed_tank_transfer_demo.js";
 import { ProjectRuntimeBridge, attachBridge } from "./plc/project_binding.js";
+import { SignalHistoryBuffer } from "./plc/history_buffer.js";
 import { attachWaterTransfer } from "./plc/equipment/water_transfer.js";
+import { attachTankTransfer } from "./plc/equipment/tank_transfer.js";
 import { runFatTest, buildFatPdf, P101_ESTOP_SHUTDOWN } from "./verify/fat_runner.js";
 import { getActiveProject } from "./model/store.js";
 import { startOpcUaServer, getOpcUaStatus } from "./connect/opcua_server.js";
@@ -61,6 +64,8 @@ import {
   validateUdtPackage,
   TARGET_IGNITION_VERSION
 } from "./connect/ignition_udt.js";
+import { validateSignalCommand } from "./plc/command_validate.js";
+import { analyzeEquipmentXRay } from "./model/xray.js";
 import { LogicDeployer } from "./plc/logic_deploy.js";
 import { listEquipmentTypes, getEquipmentType } from "./plc/equipment/library.js";
 import { traceFromTestFailure, traceFromSignal } from "./model/traceability.js";
@@ -101,24 +106,35 @@ const upload = multer({
 const io = new IOModel();
 const plc = new VirtualPLC({ io, scanMs: 50, features: { python: ENABLE_PY } });
 const runtimeBridge = new ProjectRuntimeBridge({ io, plc });
-attachBridge(plc, runtimeBridge);
+const signalHistory = new SignalHistoryBuffer({ maxFrames: 180, everyN: 2 });
+attachBridge(plc, runtimeBridge, { history: signalHistory });
 const logicDeployer = new LogicDeployer(plc);
 
-// Phase 2–4 — Canonical model + Water Transfer reference runtime
+// Canonical model + Part 13 Tank Transfer demo (active) + legacy Water Transfer seed
 try {
   initStore();
   if (process.env.P6_SEED_WATER_TRANSFER !== "0") {
+    const legacy = ensureWaterTransferProject();
+    audit("model.seed.water_transfer", { id: legacy.project.id, created: legacy.created });
+  }
+  if (process.env.P6_SEED_TANK_TRANSFER !== "0") {
+    const seeded = ensureTankTransferDemoProject();
+    audit("model.seed.tank_transfer_demo", { id: seeded.project.id, created: seeded.created });
+    const tt = attachTankTransfer(plc, io);
+    audit("runtime.tank_transfer.attach", { template: tt.ir?.metadata?.template });
+    const bound = runtimeBridge.bindProject(seeded.project);
+    if (typeof plc.onReset === "function") plc.onReset();
+    audit("runtime.bind_project", bound);
+  } else if (process.env.P6_SEED_WATER_TRANSFER !== "0") {
     const seeded = ensureWaterTransferProject();
-    audit("model.seed.water_transfer", { id: seeded.project.id, created: seeded.created });
     const wt = attachWaterTransfer(plc, io);
     audit("runtime.water_transfer.attach", { template: wt.ir?.metadata?.template });
     const bound = runtimeBridge.bindProject(seeded.project);
-    // Re-apply plant defaults after bind (E-stop healthy, stopped)
     if (typeof plc.onReset === "function") plc.onReset();
     audit("runtime.bind_project", bound);
   }
 } catch (e) {
-  console.error("Canonical model / Water Transfer init failed:", e?.message || e);
+  console.error("Canonical model / sample plant init failed:", e?.message || e);
 }
 
 // Start runtime in running mode (scan scheduler); sim clock is independent of wall time
@@ -282,9 +298,10 @@ app.get("/api/connect/engineering/udt/export", (req, res) => {
   }
 });
 
-// Phase 12 — canvas data
+// Phase 12 — canvas data (layout always from disk SoR; live values from bridge)
 app.get("/api/runtime/canvas", (_req, res) => {
-  const project = runtimeBridge.project || getActiveProject();
+  const disk = getActiveProject();
+  const project = disk || runtimeBridge.project;
   const signals = runtimeBridge.listSignals();
   const byEquip = {};
   for (const s of signals) {
@@ -292,32 +309,99 @@ app.get("/api/runtime/canvas", (_req, res) => {
     if (!byEquip[s.equipmentId]) byEquip[s.equipmentId] = [];
     byEquip[s.equipmentId].push(s);
   }
-  const nodes = (project?.equipment || []).map((eq, idx) => ({
-    id: eq.id,
-    tag: eq.tag,
-    type: eq.type,
-    operatingState: eq.operatingState,
-    x: 120 + (idx % 3) * 220,
-    y: 100 + Math.floor(idx / 3) * 160,
-    signals: byEquip[eq.id] || [],
-    live: Object.fromEntries((byEquip[eq.id] || []).map((s) => [s.tag, s.currentValue]))
-  }));
+  const layout = disk?.ui?.graph?.nodes || project?.ui?.graph?.nodes || {};
+  const nodes = (project?.equipment || []).map((eq, idx) => {
+    const saved = layout[eq.id];
+    return {
+      id: eq.id,
+      tag: eq.tag,
+      type: eq.type,
+      operatingState: eq.operatingState,
+      dataClass: eq.dataClass || null,
+      x: saved?.x ?? 120 + (idx % 3) * 220,
+      y: saved?.y ?? 100 + Math.floor(idx / 3) * 160,
+      w: saved?.w ?? (/tank/i.test(eq.type) ? 160 : 140),
+      h: saved?.h ?? (/tank/i.test(eq.type) ? 100 : 80),
+      r: saved?.r ?? 0,
+      locked: !!saved?.locked,
+      properties: eq.properties || {},
+      signals: byEquip[eq.id] || [],
+      live: Object.fromEntries((byEquip[eq.id] || []).map((s) => [s.tag, s.currentValue]))
+    };
+  });
   const links = (project?.connections || []).map((c) => ({
     id: c.id,
     from: c.fromEquipmentId,
     to: c.toEquipmentId,
-    type: c.connectionType
+    type: c.connectionType,
+    waypoints: Array.isArray(c.waypoints) ? c.waypoints : []
   }));
+  // Keep runtime bridge project.ui in sync so later reads are consistent
+  if (runtimeBridge.project && disk?.ui) {
+    runtimeBridge.project.ui = disk.ui;
+  }
   res.json({
     ok: true,
     projectId: project?.id || null,
     name: project?.name || null,
     sim: plc.clock.snapshot(),
     mode: plc.mode,
+    layoutSaved: Object.keys(layout).length > 0,
     nodes,
     links,
     mem: { M0: !!io.mem.M0, M1: !!io.mem.M1 }
   });
+});
+
+app.get("/api/runtime/xray", (req, res) => {
+  try {
+    const equipmentId = req.query.equipmentId || req.query.id || null;
+    const equipmentTag = req.query.tag || req.query.equipmentTag || null;
+    if (!equipmentId && !equipmentTag) {
+      return res.status(400).json({ ok: false, error: "equipmentId or tag required" });
+    }
+    const project = getActiveProject() || runtimeBridge.project;
+    const result = analyzeEquipmentXRay({
+      projectId: project?.id,
+      equipmentId,
+      equipmentTag,
+      signals: runtimeBridge.listSignals(),
+      mem: { M0: !!io.mem?.M0, M1: !!io.mem?.M1 }
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+app.post("/api/runtime/command", (req, res) => {
+  try {
+    const tag = req.body?.tag;
+    if (!tag) return res.status(400).json({ ok: false, error: "tag required" });
+    const value = req.body?.value;
+    const signals = runtimeBridge.listSignals();
+    const check = validateSignalCommand(tag, value, signals);
+    if (!check.ok && req.body?.force !== true) {
+      audit("runtime.command_rejected", { tag, value, reasons: check.reasons });
+      return res.status(409).json({
+        ok: false,
+        rejected: true,
+        ...check,
+        signals: Object.fromEntries(signals.map((s) => [s.tag, s.currentValue]))
+      });
+    }
+    const signal = runtimeBridge.setSignal(String(tag), value, { override: !!req.body?.override });
+    audit("runtime.command", { tag, value: signal.currentValue, forced: !!req.body?.force });
+    res.json({
+      ok: true,
+      signal,
+      validation: check,
+      ...plc.status(),
+      mem: { M0: !!io.mem.M0, M1: !!io.mem.M1 }
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e) });
+  }
 });
 
 // Phase 13 — traceability
@@ -371,9 +455,18 @@ app.post("/api/ingest/ocr", upload.single("file"), async (req, res) => {
 });
 app.post("/api/ingest/ocr/promote", requirePerm("model.write"), (req, res) => {
   try {
-    const result = promoteExtractions(req.body || {});
-    audit("ingest.ocr.promote", { projectId: result.project.id });
-    res.status(201).json({ ok: true, ...result });
+    const result = promoteExtractions({ ...req.body, placeOnCanvas: req.body?.placeOnCanvas !== false });
+    audit("ingest.ocr.promote", {
+      projectId: result.project.id,
+      equipment: result.created.equipment.length
+    });
+    // Keep Runtime bound to the updated canonical model so Studio sees live state immediately
+    const bound = runtimeBridge.bindProject(result.project);
+    res.status(201).json({
+      ok: true,
+      ...result,
+      runtimeBound: { projectId: bound.projectId || result.project.id, signalCount: bound.signalCount }
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
@@ -423,7 +516,21 @@ app.post("/api/runtime/logic/rollback", (req, res) => {
   res.json(r);
 });
 
-app.use("/api/model", createModelRouter({ audit }));
+app.use(
+  "/api/model",
+  createModelRouter({
+    audit,
+    onModelChange: ({ project, reason }) => {
+      const bound = runtimeBridge.bindProject(project);
+      audit("runtime.auto_rebind", {
+        reason,
+        projectId: project?.id,
+        signalCount: bound.signalCount
+      });
+      return { ok: true, projectId: project?.id, signalCount: bound.signalCount, reason };
+    }
+  })
+);
 
 // Phase 7 — P6 Verify
 app.get("/api/verify/tests", (_req, res) => {
@@ -938,6 +1045,40 @@ app.post("/api/runtime/reset", (req, res) => {
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
+});
+/** Adjust VirtualPLC scan interval — paces wall-clock vs sim progression (not fake physics). */
+app.post("/api/runtime/speed", (req, res) => {
+  try {
+    const scanMs = Math.max(5, Math.min(500, Number(req.body?.scanMs) || 50));
+    plc.setScanMs(scanMs);
+    audit("runtime.speed", { scanMs });
+    res.json({ ok: true, scanMs: plc.scanMs, ...plc.status() });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+/** Signal history ring buffer for Studio timeline playback (authoritative recorded frames). */
+app.get("/api/runtime/history", (req, res) => {
+  const includeFrame = req.query.frame != null || req.query.index != null;
+  if (includeFrame) {
+    const idx = Number(req.query.frame ?? req.query.index);
+    const frame = signalHistory.get(idx);
+    if (!frame) return res.status(404).json({ ok: false, error: "Frame not found" });
+    return res.json({ ok: true, ...signalHistory.meta(), frame });
+  }
+  res.json({ ok: true, ...signalHistory.meta(), frames: signalHistory.list() });
+});
+app.post("/api/runtime/history/recording", (req, res) => {
+  const on = req.body?.recording !== false && req.body?.on !== false;
+  signalHistory.setRecording(!!(req.body?.recording ?? req.body?.on ?? on));
+  audit("runtime.history.recording", { recording: signalHistory.recording });
+  res.json({ ok: true, ...signalHistory.meta() });
+});
+app.post("/api/runtime/history/clear", (req, res) => {
+  signalHistory.clear();
+  audit("runtime.history.clear", {});
+  res.json({ ok: true, ...signalHistory.meta() });
 });
 
 // --- Auth (Secure Mode: password + session cookie; bypass ignored when secure mode ON) ---

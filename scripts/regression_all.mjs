@@ -13,6 +13,9 @@ const jobs = [
   { name: "model", cmd: "node", args: ["server/model/smoke_test.js"] },
   { name: "runtime", cmd: "node", args: ["server/plc/smoke_test_runtime.js"] },
   { name: "water_transfer", cmd: "node", args: ["server/plc/equipment/smoke_test_water_transfer.js"] },
+  { name: "tank_transfer", cmd: "node", args: ["server/plc/equipment/smoke_test_tank_transfer.js"] },
+  { name: "xray", cmd: "node", args: ["server/model/smoke_test_xray.js"] },
+  { name: "history", cmd: "node", args: ["server/plc/smoke_test_history.js"] },
   {
     name: "fat_estop",
     cmd: "node",
@@ -23,7 +26,8 @@ const jobs = [
     ]
   },
   { name: "ocr", cmd: "node", args: ["scripts/smoke_ocr.mjs"] },
-  { name: "ignition_udt", cmd: "node", args: ["scripts/smoke_ignition_udt.mjs"] }
+  { name: "ignition_udt", cmd: "node", args: ["scripts/smoke_ignition_udt.mjs"] },
+  { name: "studio_e2e", cmd: "node", args: ["scripts/smoke_studio_e2e.mjs"] }
 ];
 
 let failed = 0;

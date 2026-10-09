@@ -124,6 +124,7 @@ export function createEquipment({
     states,
     initialState,
     operatingState: initialState,
+    properties: {},
     sourceDocumentIds: [...sourceDocumentIds],
     createdAt: ts,
     updatedAt: ts
@@ -220,8 +221,9 @@ export function createConnection({
   projectId,
   fromEquipmentId,
   toEquipmentId,
-  connectionType = "process", // process | instrument | signal
-  description = ""
+  connectionType = "process", // process | instrument | signal | mechanical | electrical | communication
+  description = "",
+  waypoints = []
 }) {
   return {
     id: id("conn"),
@@ -230,6 +232,9 @@ export function createConnection({
     toEquipmentId,
     connectionType,
     description,
+    waypoints: Array.isArray(waypoints)
+      ? waypoints.map((w) => ({ x: Number(w.x) || 0, y: Number(w.y) || 0 })).filter((w) => Number.isFinite(w.x) && Number.isFinite(w.y))
+      : [],
     createdAt: nowIso()
   };
 }

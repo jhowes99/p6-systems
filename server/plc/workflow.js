@@ -1,4 +1,4 @@
-// Canonical workflow state machine for Axiom Control
+// Canonical workflow state machine for P6 Systems
 // Tracks: Import/Place → Safety → Behavior → Test → Deploy
 
 export const WORKFLOW_STEPS = {

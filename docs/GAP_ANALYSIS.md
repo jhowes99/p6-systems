@@ -11,8 +11,8 @@
 |------|----------------|------------------|
 | Application source in git | **Requires refactoring** | `server/` / `web/` only in installer zip; clone broken |
 | Docker single-container run | Existing and working (needs restore) | Dockerfile + compose files present |
-| P6 branding (Studio/Runtime/Verify/Connect) | Missing | UI still “Axiom Verify” |
-| Customer-facing Axiom copy removal | Missing | README, shell, exporters, Electron productName |
+| P6 branding (Studio/Runtime/Verify/Connect) | Done | Logos + shell + Verify product name |
+| Customer-facing Axiom copy removal | Done | UI/titles/exporters/Electron productName → P6 Systems |
 | End-to-end engineering workflow (spec §3–15) | Existing but incomplete | Pieces exist; not one coherent P6 Studio flow |
 
 ---

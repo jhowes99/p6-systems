@@ -17,7 +17,7 @@ export function exportPython(ir) {
   for (const net of ir?.networks ?? []) for (const rung of net?.rungs ?? []) rungs.push(rung);
 
   const lines = [];
-  lines.push(`# Generated from Ladder IR by Axiom Control`);
+  lines.push(`# Generated from Ladder IR by P6 Systems`);
   lines.push(`#`);
   lines.push(`# Tag -> Address mapping (from the builder):`);
   for (const [tag, addr] of Object.entries(ioMap)) {
@@ -87,7 +87,7 @@ export function exportSiemensSCL(ir) {
   const st = ladderIRToST(ir);
   const lines = [];
   lines.push("(* Siemens SCL export (MVP) *)");
-  lines.push("FUNCTION_BLOCK FB_Axiom");
+  lines.push("FUNCTION_BLOCK FB_P6Systems");
   lines.push("VAR");
   lines.push("  (* Map tags/IO in TIA Portal as needed *)");
   lines.push("END_VAR");

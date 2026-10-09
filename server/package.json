@@ -1,5 +1,5 @@
 {
-  "name": "axiom_runtime",
+  "name": "p6-app",
   "version": "0.1.0",
   "type": "module",
   "main": "server.js",

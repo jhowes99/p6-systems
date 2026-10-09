@@ -1,4 +1,4 @@
-# Building Windows Installer for Axiom Control
+# Building Windows Installer for P6 Systems
 
 ## Quick Start (Electron Builder - Recommended)
 
@@ -42,14 +42,14 @@ npm run build:win:portable
 ### Step 4: Find Your Installer
 
 Installers will be in the `dist/` folder:
-- `Axiom Control Setup 1.0.0.exe` - NSIS installer (recommended)
-- `Axiom Control 1.0.0.msi` - MSI installer (for IT deployment)
-- `Axiom Control 1.0.0.exe` - Portable version
+- `P6 Systems Setup 1.0.0.exe` - NSIS installer (recommended)
+- `P6 Systems 1.0.0.msi` - MSI installer (for IT deployment)
+- `P6 Systems 1.0.0.exe` - Portable version
 
 ## What Users Get
 
 When users run the installer:
-1. ✅ Application installs to `C:\Program Files\Axiom Control`
+1. ✅ Application installs to `C:\Program Files\P6 Systems`
 2. ✅ Desktop shortcut created
 3. ✅ Start Menu entry added
 4. ✅ Can uninstall via Windows Settings

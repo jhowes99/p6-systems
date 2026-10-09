@@ -11,7 +11,7 @@ function exprToST(expr) {
 
 export function ladderIRToST(ir) {
   const lines = [];
-  lines.push("(* Generated from Ladder IR by Axiom Control *)");
+  lines.push("(* Generated from Ladder IR by P6 Systems *)");
   lines.push("");
   lines.push("PROGRAM MAIN");
   lines.push("VAR");

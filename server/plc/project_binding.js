@@ -261,14 +261,26 @@ export class ProjectRuntimeBridge {
 
 /**
  * Wire bridge callbacks onto VirtualPLC.
+ * @param {object} [opts.history] optional SignalHistoryBuffer
  */
-export function attachBridge(plc, bridge) {
-  plc.afterScan = async ({ simTimeMs }) => {
+export function attachBridge(plc, bridge, opts = {}) {
+  const history = opts.history || null;
+  plc.afterScan = async ({ simTimeMs, scanCount, io: scanIo }) => {
     bridge.syncFromIo({ simTimeMs });
+    if (history) {
+      const memSrc = scanIo?.mem || bridge.io?.mem || {};
+      history.record({
+        scanCount,
+        simTimeMs,
+        signals: bridge.listSignals(),
+        mem: { M0: !!memSrc.M0, M1: !!memSrc.M1 }
+      });
+    }
   };
   plc.onReset = () => {
     bridge.restoreInitials();
     bridge.syncFromIo({ simTimeMs: 0 });
+    history?.clear();
   };
   return bridge;
 }

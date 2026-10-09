@@ -1,7 +1,7 @@
 Docker Desktop installer (for one-click setup)
 ==============================================
 
-To let users run Ironclad Runtime with zero technical steps:
+To let users run P6 Systems with zero technical steps:
 
 1. Download Docker Desktop for Windows:
    https://www.docker.com/products/docker-desktop/

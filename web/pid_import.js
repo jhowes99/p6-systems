@@ -42,7 +42,7 @@ const API = {
     if (!res.ok) {
       const text = await res.text();
       if (res.status === 404) {
-        return { ok: false, serverDown: true, error: "Start the Axiom Verify server and open this page from it." };
+        return { ok: false, serverDown: true, error: "Start the P6 Systems server and open this page from it." };
       }
       return { ok: false, error: (text && text.slice(0, 200)) || "Generation failed." };
     }

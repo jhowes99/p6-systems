@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Logic to Control Narrative — Axiom Verify</title>
+    <title>Logic to Control Narrative — P6 Systems</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="site.css" />
     <link rel="stylesheet" href="app_shell.css" />
@@ -156,7 +156,7 @@
 
         function showServerBanner(reason) {
           if (!serverBanner) return;
-          var msg = "Use Logic to Control Narrative from within Axiom Verify. ";
+          var msg = "Use Logic to Control Narrative from within P6 Systems. ";
           if (reason === "file") {
             msg += "Open the app (or go to <a href=\"" + baseUrl + "/pid_import.html\" target=\"_blank\" rel=\"noopener\">Import and Generate</a>), then open the <strong>Logic to Control Narrative</strong> tab. Same flow: pick your PDF, click Generate.";
           } else {
@@ -265,7 +265,7 @@
               } else {
                 statusEl.className = "narrative-status narrative-status--error";
                 if (x.json && x.json.isServerDown) {
-                  statusEl.innerHTML = "Use Logic to Control Narrative from within Axiom Verify. Open <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a> — same flow, one place.";
+                  statusEl.innerHTML = "Use Logic to Control Narrative from within P6 Systems. Open <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a> — same flow, one place.";
                 } else {
                   statusEl.textContent = (x.json && x.json.error) ? x.json.error : "Generation failed.";
                 }
@@ -277,7 +277,7 @@
               statusEl.className = "narrative-status narrative-status--error";
               var msg = err.message || String(err);
               if (msg.indexOf("<!DOCTYPE") !== -1 || msg.indexOf("is not valid JSON") !== -1) {
-                statusEl.innerHTML = "Use Logic to Control Narrative from within Axiom Verify. Open <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a>.";
+                statusEl.innerHTML = "Use Logic to Control Narrative from within P6 Systems. Open <a href=\"/pid_import.html#narrative\">Import and Generate → Logic to Control Narrative</a>.";
               } else {
                 statusEl.textContent = "Request failed: " + msg;
               }

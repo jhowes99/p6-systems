@@ -1,5 +1,5 @@
 ================================================================================
-  Axiom Verify - Install and share
+  P6 Systems - Install and share
 ================================================================================
 
 --- IF YOU RECEIVED A ZIP (e.g. from Google Drive) ---
@@ -16,6 +16,7 @@
    - To stop: close the black window or press Ctrl+C in it.
 
 That's it. Use the Workflow page to import, validate, run tests, and export.
+Use P6 Verify for FAT evidence.
 
 
 --- IF YOU WANT TO SHARE THIS APP (e.g. via Google Drive) ---
@@ -27,7 +28,7 @@ Option A - Share the whole folder as a ZIP
 
 Option B - Use the installer to build a smaller ZIP
   1. Run:  installer\create-portable.bat
-  2. It creates  AxiomControl-Portable-1.0.0.zip  in the project folder.
+  2. It creates  P6Systems-Portable-1.0.0.zip  in the project folder.
   3. Upload that ZIP to Google Drive and share.
   4. Recipients: unzip, run INSTALL.bat (once), then START.bat. Node.js required.
 

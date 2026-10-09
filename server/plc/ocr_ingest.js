@@ -35,12 +35,18 @@ export async function extractText(buffer, mimeType = "") {
       const confidence = typeof result?.data?.confidence === "number"
         ? result.data.confidence / 100
         : (text.trim() ? 0.6 : 0.1);
+      const unfinished =
+        "LIMIT: Scanned image OCR is unfinished — results are ENGINEERING_INFERENCE only; " +
+        "empty/low-confidence tags are expected on drawings. Prefer text/PDF/CSV or typed equipment lists.";
       return {
         text,
         confidence,
         engine: "tesseract.js",
         dataClassHint: "ENGINEERING_INFERENCE",
-        warning: "OCR candidates require engineer review before approval"
+        unfinished: true,
+        warning: text.trim()
+          ? `${unfinished} Candidates require engineer review before approval.`
+          : `${unfinished} No usable text extracted from this image.`
       };
     } finally {
       await worker.terminate();
@@ -61,19 +67,22 @@ export function mineCandidates(text) {
   const seen = new Set();
   // Prefer longer ISA-style prefixes (ESTOP, TANK, LSH, XV) before short ones (P, M)
   const re =
-    /\b((?:ESTOP|TANK|LSH|LSL|LT|XV|TK|ES|[A-Z]{1,3})-?\d{2,4}[A-Z]?)\b/gi;
+    /\b((?:ESTOP|ESD|PUMP|VALVE|TANK|FIT|LSH|LSL|LT|PT|TT|XV|TK|FT|FE|ES|[A-Z]{1,4})-?\d{2,4}[A-Z]?)\b/gi;
   let m;
   while ((m = re.exec(text || "")) !== null) {
     const tag = m[1].toUpperCase();
     if (seen.has(tag)) continue;
     seen.add(tag);
     let type = "equipment";
-    if (/^ESTOP|^ES\d/i.test(tag)) type = "emergency_stop_input";
+    if (/ESTOP|ESD|^ES\d/i.test(tag)) type = "emergency_stop_input";
     else if (/^TANK|^TK/i.test(tag) || /^T-?\d/i.test(tag)) type = "tank";
-    else if (/^LSH|^LSL|^LT/i.test(tag)) type = "level_switch";
-    else if (/^XV/i.test(tag) || /^V-?\d/i.test(tag)) type = "valve";
-    else if (/^P-?\d/i.test(tag) || /^P\d/.test(tag)) type = "pump";
-    else if (/^M-?\d/i.test(tag) || /^M\d/.test(tag)) type = "motor";
+    else if (/^FIT|^FT|^FE/i.test(tag)) type = "flow_transmitter";
+    else if (/^PT|^PI/i.test(tag)) type = "pressure_transmitter";
+    else if (/^TT|^TI/i.test(tag)) type = "temperature_transmitter";
+    else if (/^LSH|^LSL|^LT|^LI/i.test(tag)) type = "level_transmitter";
+    else if (/^XV|^HV|^FV|^VALVE|^V-?\d/i.test(tag)) type = "valve";
+    else if (/^PUMP|^P-?\d|^P\d/i.test(tag)) type = "pump";
+    else if (/^MOTOR|^M-?\d|^M\d/i.test(tag)) type = "motor";
     candidates.push({
       tag,
       type,

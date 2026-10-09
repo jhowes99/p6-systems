@@ -13,7 +13,11 @@
   <main class="wrap">
     <div class="card">
       <h1 style="margin:0;">P6 Connect</h1>
-      <p class="small">Industrial connectivity. Ignition is optional — core Runtime does not require it.</p>
+      <p class="small">Industrial connectivity. Ignition is <b>optional</b> — core Runtime does not require it.</p>
+      <p class="small" style="margin-top:0.5rem;padding:0.65rem 0.75rem;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;color:#78350f;">
+        <b>LIMIT:</b> Ignition / OPC live tag path is unproven in this build. Status below shows connectivity configuration only —
+        do not claim live plant sync until proven with the Compose <code>ignition</code> profile. Live write-back stays gated off.
+      </p>
       <div id="status" class="small" style="margin-top:1rem;"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;">
         <div>

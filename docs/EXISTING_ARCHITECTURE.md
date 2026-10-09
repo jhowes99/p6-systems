@@ -38,9 +38,9 @@ There is **no** separate frontend build (no React/Vite). UI is multi-page static
 
 ### Branding
 
-- Product name in shell: **“Axiom Verify”** (`web/app_shell.js`)
-- README / Electron package: **Axiom** / **Axiom Control**
-- Installer scripts: **Ironclad Runtime**
+- Product name in shell: **P6 Systems** / **P6 Verify** (`web/app_shell.js`, logos in `web/logo*.png`)
+- README / Electron package: **P6 Systems**
+- Legacy installer/compose filenames may still say Ironclad / `axiom_runtime`
 - No P6 Systems branding yet
 
 ### Navigation (current tabs)

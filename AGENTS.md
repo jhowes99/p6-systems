@@ -13,7 +13,7 @@ Enduring rules for every development session. Read this file and `docs/BUILD_STA
 | **P6 Connect** | Industrial connectivity (Ignition optional) |
 | **P6 Verify** | Automated testing and commissioning |
 
-Legacy names (Axiom, Ironclad, `axiom_runtime`) may remain in package/repo identifiers until a planned rename. **Customer-facing UI and docs must say P6 Systems.**
+**Customer-facing UI and docs must say P6 Systems** (Verify surface: **P6 Verify**). Logos: `web/logo.png` (Systems), `web/logo-verify.png` (Verify). Legacy compose filenames / GitHub origin may still mention Ironclad/`axiom_runtime` until cleaned up.
 
 Upstream origin: `https://github.com/jhowes99/Ironclad_Runtime.git`
 
@@ -43,11 +43,12 @@ Logical architecture (Studio → Model → Runtime/Verify → Connect) is define
 
 ## Development order
 
-Follow `docs/IMPLEMENTATION_PLAN.md` and **`docs/DEVELOPMENT_ROADMAP.md`** (Addendum milestones A–F).
+**Authority (supersedes prior plans):** User-fed *MASTER PLATFORM BUILD SPECIFICATION* (§1–§45).  
+Audit / ledger: `docs/PLATFORM_AUDIT.md` · status: `docs/BUILD_STATUS.md`.
 
-Foundation (Phases 0–20 + OPC UA) is in tree. **Do not rebuild working Runtime/Connect paths.** Extend via adapters on the canonical model.
+Phases (§41): 1 Foundation → 2 Interactive Studio → 3 Runtime → 4 X-Ray → 5 Verify → 6 Connect → 7 Expansion.
 
-**Active priority:** Milestone A → B → C (Ignition Engineering Generator), then D–E templates / P&ID match, then F end-to-end demo. Sparkplug and custom Ignition modules remain deferred.
+**Active priority:** Universal shell + §40 two-tank interactive workflow (visual feedback required). Preserve landing page. Do not rebuild working Runtime/Connect paths — extend via the canonical model.
 
 ### Addendum rules
 
@@ -73,6 +74,9 @@ Foundation (Phases 0–20 + OPC UA) is in tree. **Do not rebuild working Runtime
 
 | Doc | Purpose |
 |-----|---------|
+| `docs/ARCHITECTURE_AUDIT.md` | Honest capability classification |
+| `docs/BUILD_PROGRESS.md` | Current rebuild phase / tests |
+| `docs/WORKSPACE_IMPLEMENTATION_PLAN.md` | Studio rebuild phases 0–9 |
 | `docs/DEVELOPMENT_ROADMAP.md` | Phases + Addendum milestones A–F |
 | `docs/ENGINEERING_DATA_MODEL.md` | Shared SoR / adapter rules |
 | `docs/IGNITION_INTEGRATION.md` | Connect, UDT generator, deploy rules |

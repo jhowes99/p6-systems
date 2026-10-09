@@ -16,6 +16,7 @@ import {
   setDataRootOverride
 } from "./store.js";
 import { ensureWaterTransferProject } from "./seed_water_transfer.js";
+import { ensureTankTransferDemoProject, TANK_TRANSFER_DEMO_NAME } from "./seed_tank_transfer_demo.js";
 import { SCHEMA_VERSION, DataClass } from "./schema.js";
 import { migrateProject } from "./migrate.js";
 
@@ -64,6 +65,18 @@ deleteProject(empty.id);
 const loaded = loadProject(project.id);
 assert(loaded?.name === "Water Transfer System", "reload water transfer");
 
+const demo = ensureTankTransferDemoProject();
+assert(demo.created === true, "§40 demo seed creates");
+assert(demo.project.name === TANK_TRANSFER_DEMO_NAME, "demo name");
+assert(demo.project.equipment.length === 7, `expected 7 §40 equipment, got ${demo.project.equipment.length}`);
+const demoTags = new Set(demo.project.equipment.map((e) => e.tag));
+for (const t of ["TANK-101", "TANK-102", "PUMP-101", "M-101", "VALVE-101", "LT-101", "ESD-101"]) {
+  assert(demoTags.has(t), `missing §40 equipment ${t}`);
+}
+assert(demo.project.ui?.graph?.nodes, "demo default graph layout");
+const demoAgain = ensureTankTransferDemoProject();
+assert(demoAgain.created === false, "demo seed idempotent");
+
 setDataRootOverride(null);
 fs.rmSync(tmpRoot, { recursive: true, force: true });
 console.log("Phase 2 smoke_test: PASS");
@@ -72,5 +85,9 @@ console.log(JSON.stringify({
   equipment: project.equipment.map((e) => e.tag),
   signals: project.signals.length,
   interlocks: project.interlocks.length,
-  testCases: project.testCases.map((t) => t.name)
+  testCases: project.testCases.map((t) => t.name),
+  part13Demo: {
+    id: demo.project.id,
+    equipment: [...demoTags]
+  }
 }, null, 2));

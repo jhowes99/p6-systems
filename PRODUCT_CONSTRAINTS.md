@@ -1,10 +1,10 @@
 # Product Constraints
 
-**This document defines what Axiom Control IS and IS NOT. All contributors must follow these constraints.**
+**This document defines what P6 Systems IS and IS NOT. All contributors must follow these constraints.**
 
 ## IS
 
-Axiom Control is:
+P6 Systems is:
 
 - **A visual reasoning engine for industrial control behavior** - It explains why outputs energize or do not energize in plain, deterministic terms
 - **Beginner-first and physical-first** - Designed for electricians and automation technicians who think in physical devices, not ladder logic
@@ -12,7 +12,7 @@ Axiom Control is:
 
 ## IS NOT
 
-Axiom Control is NOT:
+P6 Systems is NOT:
 
 - **A full PLC IDE** - We do not provide comprehensive ladder editing, debugging tools, or full PLC development environments
 - **A ladder editor** - While we may display ladder-like representations, we are not building a ladder programming tool

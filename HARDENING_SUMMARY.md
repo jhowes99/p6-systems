@@ -1,6 +1,6 @@
 # Product Hardening Summary
 
-This document summarizes the work completed to harden Axiom Control into a shippable product.
+This document summarizes the work completed to harden P6 Systems into a shippable product.
 
 ## ✅ Completed
 

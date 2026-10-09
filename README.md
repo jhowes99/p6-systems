@@ -1,4 +1,6 @@
-# Axiom Control
+# P6 Systems
+
+Industrial engineering, simulation, and virtual commissioning platform (**P6 Studio**, **P6 Runtime**, **P6 Verify**, **P6 Connect**).
 
 A local virtual PLC runtime with:
 - **P&ID Import** - Automatically generate PLC code from P&ID documents (perfect for non-PLC users!)

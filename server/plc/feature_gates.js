@@ -1,4 +1,4 @@
-// Feature gate registry for Axiom Control
+// Feature gate registry for P6 Systems
 // See PRODUCT_CONSTRAINTS.md - require new features to be registered before implementation
 
 export const FEATURE_GATES = {

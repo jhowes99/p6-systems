@@ -1,4 +1,4 @@
-// Deterministic evaluator core for Axiom Control
+// Deterministic evaluator core for P6 Systems
 // 
 // IMPORTANT: See PRODUCT_CONSTRAINTS.md (linked from README.md)
 // - All logic evaluation must be pure and deterministic

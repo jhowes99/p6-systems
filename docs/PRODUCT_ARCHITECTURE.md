@@ -70,7 +70,7 @@ Documents → Review/Approve → Canonical Model → Logic + Equipment
 
 | Logical block | Deployed as (Phase 1) | Status |
 |---------------|----------------------|--------|
-| P6 Studio | Static UI in `p6-app` | Partial (Axiom-era pages) |
+| P6 Studio | Static UI in `p6-app` | Partial (legacy pages) |
 | P&ID Ingestion | Modules in `p6-app` | Partial (PDF/JSON; OCR incomplete) |
 | Engineering Tools | Modules in `p6-app` | Partial |
 | Canonical P6 Model | `server/data/canonical/` + `/api/model` | Phase 2 done (schema v1); Runtime bind = Phase 3 |

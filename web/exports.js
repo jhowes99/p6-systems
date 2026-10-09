@@ -153,7 +153,7 @@ document.getElementById("btnCodesys").onclick = async () => {
   try {
     const t = await fetchText("/api/export/codesys");
     elPrev.textContent = t;
-    download("axiom_codesys.st", t, "text/plain");
+    download("P6 Systems_codesys.st", t, "text/plain");
     elMsg.textContent = "Downloaded Codesys ST.";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
@@ -162,7 +162,7 @@ document.getElementById("btnSiemens").onclick = async () => {
   try {
     const t = await fetchText("/api/export/siemens");
     elPrev.textContent = t;
-    download("axiom_siemens.scl", t, "text/plain");
+    download("P6 Systems_siemens.scl", t, "text/plain");
     elMsg.textContent = "Downloaded Siemens SCL.";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
@@ -171,7 +171,7 @@ document.getElementById("btnPython").onclick = async () => {
   try {
     const t = await fetchText("/api/export/python");
     elPrev.textContent = t;
-    download("axiom_program.py", t, "text/x-python");
+    download("P6 Systems_program.py", t, "text/x-python");
     elMsg.textContent = "Downloaded Python export.";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
@@ -215,7 +215,7 @@ document.getElementById("btnIOListCSV").onclick = async () => {
   try {
     const t = await fetchText("/api/export/io-list?format=csv");
     elPrev.textContent = t;
-    download("axiom_io_list.csv", t, "text/csv");
+    download("P6 Systems_io_list.csv", t, "text/csv");
     elMsg.textContent = "Downloaded I/O List (CSV).";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; showBanner("error", e?.message); }
 };
@@ -224,7 +224,7 @@ document.getElementById("btnIOListJSON").onclick = async () => {
   try {
     const j = await fetchJson("/api/export/io-list?format=json");
     elPrev.textContent = JSON.stringify(j, null, 2);
-    download("axiom_io_list.json", JSON.stringify(j, null, 2), "application/json");
+    download("P6 Systems_io_list.json", JSON.stringify(j, null, 2), "application/json");
     elMsg.textContent = "Downloaded I/O List (JSON).";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
@@ -252,19 +252,19 @@ async function downloadCsvEndpoint(url, filename, description) {
 
 document.getElementById("btnTerminalPlan").onclick = async () => {
   try {
-    await downloadCsvEndpoint("/api/export/terminal-plan", "axiom_terminal_plan.csv", "Downloaded Terminal Plan (CSV).");
+    await downloadCsvEndpoint("/api/export/terminal-plan", "P6 Systems_terminal_plan.csv", "Downloaded Terminal Plan (CSV).");
     elPrev.textContent = "Terminal plan CSV downloaded.";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
 document.getElementById("btnWireSchedule").onclick = async () => {
   try {
-    await downloadCsvEndpoint("/api/export/wire-schedule", "axiom_wire_schedule.csv", "Downloaded Wire Schedule (CSV).");
+    await downloadCsvEndpoint("/api/export/wire-schedule", "P6 Systems_wire_schedule.csv", "Downloaded Wire Schedule (CSV).");
     elPrev.textContent = "Wire schedule CSV downloaded.";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
 document.getElementById("btnIOCheckout").onclick = async () => {
   try {
-    await downloadCsvEndpoint("/api/export/io-checkout", "axiom_io_checkout.csv", "Downloaded I/O Checkout (CSV).");
+    await downloadCsvEndpoint("/api/export/io-checkout", "P6 Systems_io_checkout.csv", "Downloaded I/O Checkout (CSV).");
     elPrev.textContent = "I/O checkout CSV downloaded.";
   } catch (e) { elMsg.textContent = `Error: ${e.message}`; }
 };
