@@ -30,6 +30,16 @@
   let connectFrom = null;
   let xrayMode = false;
   let xrayData = null;
+  /** When true, auto-fit (boot/resize/workspace) skips; explicit Fit buttons clear/override. */
+  let userViewLocked = false;
+  let interlocksData = null;
+  let logicStatusCache = null;
+  let selectedInterlockId = null;
+  let ilkHighlightIds = new Set();
+  let ilkHighlightActive = false;
+  /** equipmentId -> "active" | "armed" — drives top-left interlock lock badge */
+  let ilkCornerByEq = new Map();
+  let ilkPollTick = 0;
   let selectedLinkId = null;
   let workspaceMode = "simulation"; // engineering | simulation | diagnostic
   let rafId = 0;
@@ -76,6 +86,8 @@
 
   /** Cached from /api/readiness — also posted into Alarms for a second reminder. */
   let platformLimitsCache = [];
+  /** CEM 2.0 — last engineering validation from /api/model/.../validation */
+  let lastModelValidation = null;
 
   function updateAlarmsTabBadge() {
     const btn = document.querySelector('[data-actab="alarms"]');
@@ -83,7 +95,7 @@
     if (!btn || !alarmLog) return;
     const n = alarmLog.querySelectorAll(".ev").length;
     const limits = alarmLog.querySelectorAll(".ev.limit").length;
-    btn.textContent = n ? `Alarms (${n}${limits ? ` · ${limits} limit` : ""})` : "Alarms";
+    btn.textContent = limits ? `Alarms · ${limits} limits` : (n ? `Alarms (${n})` : "Alarms");
   }
 
   /**
@@ -472,6 +484,7 @@
       { label: "Configure", action: () => { setSelection([node.id], node.id); inspTab = "overview"; syncInspTabs(); studio.classList.add("show-inspector"); renderInspector(); } },
       { label: "Control", action: () => { setSelection([node.id], node.id); inspTab = "control"; syncInspTabs(); renderInspector(); } },
       { label: "X-Ray / Why blocked?", action: () => { setSelection([node.id], node.id); setWorkspaceMode("diagnostic"); } },
+      { label: "Show Interlocks (inside)", action: () => { setSelection([node.id], node.id); openInterlocksPanel({ equipmentId: node.id }); } },
       { label: "Inspect I/O", action: () => { setSelection([node.id], node.id); inspTab = "io"; syncInspTabs(); renderInspector(); } },
       { sep: true },
       ...cmds.map((c) => ({
@@ -586,6 +599,16 @@
     return /INFERENCE|EXTRACT|UNVERIFIED|OCR/i.test(dc);
   }
 
+  async function refreshModelValidation() {
+    if (!projectId) return;
+    try {
+      const d = await api(`/api/model/projects/${projectId}/validation`);
+      lastModelValidation = d.validation || null;
+    } catch {
+      lastModelValidation = null;
+    }
+  }
+
   async function refreshProject() {
     const d = await api("/api/model/projects/active");
     const p = d.project;
@@ -593,7 +616,45 @@
     projectId = p.id;
     document.getElementById("projectName").textContent = p.name || "Untitled";
     document.getElementById("projectMeta").textContent =
-      `id=${p.id} · model v${p.modelVersion} · layout ${p.ui?.graph?.updatedAt ? "saved" : "default"}`;
+      `id=${p.id} · model v${p.modelVersion} · schema v${p.schemaVersion ?? "—"} · layout ${p.ui?.graph?.updatedAt ? "saved" : "default"}`;
+    await refreshModelValidation();
+  }
+
+  async function refreshLogicStatus() {
+    try {
+      logicStatusCache = await api("/api/runtime/logic");
+    } catch (_) {
+      logicStatusCache = null;
+    }
+    if (inspTab === "control" && selected) renderInspector();
+    if (!selected && workspaceMode === "diagnostic") renderInspectorEmptyLogic();
+  }
+
+  function logicObservabilityHtml() {
+    const L = logicStatusCache;
+    if (!L?.ok) {
+      return `<section class="logicObs"><h4>Runtime logic program</h4><p class="muted">Logic status unavailable — start Runtime.</p></section>`;
+    }
+    const st = L.staged
+      ? `Staged deploy v${L.staged.version ?? "?"} (${esc(L.staged.note || "pending apply")})`
+      : `Active program v${L.currentVersion ?? "default"}`;
+    const rungs = L.program?.rungs?.length ?? L.program?.instructions?.length ?? (L.program ? Object.keys(L.program).length : 0);
+    return `<section class="logicObs">
+      <h4>Runtime logic program</h4>
+      <p><b>${st}</b> · observability only — staged apply/rollback APIs unchanged.</p>
+      <p class="muted">Program IR size hint: ${esc(String(rungs))} rung(s)/blocks · history ${esc(String(L.historyCount ?? 0))}</p>
+      <details class="advDetails"><summary>Advanced (program IR excerpt)</summary><pre class="mono">${esc(JSON.stringify(L.program || {}, null, 2).slice(0, 2400))}${JSON.stringify(L.program || {}).length > 2400 ? "…" : ""}</pre></details>
+    </section>`;
+  }
+
+  function renderInspectorEmptyLogic() {
+    const title = document.getElementById("inspTitle");
+    const sub = document.getElementById("inspSub");
+    const body = document.getElementById("inspBody");
+    if (selected || workspaceMode !== "diagnostic") return;
+    title.textContent = "Diagnostics";
+    sub.textContent = "Runtime logic · no equipment selected";
+    body.innerHTML = `${logicObservabilityHtml()}<p class="muted">Select equipment for Control / X-Ray tabs.</p>`;
   }
 
   async function refreshStatus() {
@@ -609,6 +670,7 @@
       document.getElementById("pillSim").textContent = t != null ? `SIM ${t}ms` : "SIM —";
       if (s.mem?.M1 || ioTripHint(lastCanvas)) run.classList.add("trip");
     } catch (_) { /* ignore */ }
+    if (workspaceMode === "diagnostic") refreshLogicStatus().catch(() => {});
   }
 
   function ioTripHint(canvas) {
@@ -666,6 +728,11 @@
     el.dataset.id = node.id;
     el.dataset.type = node.type || "";
     el.innerHTML = `
+      <span class="ilkCorner" hidden title="Interlock" aria-label="Interlock">
+        <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+          <path fill="currentColor" d="M8 1.5a2.75 2.75 0 0 0-2.75 2.75V6H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 6h-.75V4.25A2.75 2.75 0 0 0 8 1.5zm1.25 4.5h-2.5V4.25a1.25 1.25 0 1 1 2.5 0V6zM8 9.25a.9.9 0 0 1 .9.9v1.2a.9.9 0 1 1-1.8 0v-1.2a.9.9 0 0 1 .9-.9z"/>
+        </svg>
+      </span>
       <span class="badge" hidden>!</span>
       <div class="tankFill" hidden></div>
       <div class="sym"></div>
@@ -673,6 +740,11 @@
       <div class="type"></div>
       <div class="liveLine"></div>
       <div class="resizeHandle" data-resize="1" title="Resize"></div>`;
+    el.querySelector(".ilkCorner")?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const n = lastCanvas?.nodes?.find((x) => x.id === node.id);
+      if (n) openInterlocksPanel({ equipmentId: n.id });
+    });
     el.addEventListener("pointerdown", (ev) => {
       const n = lastCanvas?.nodes?.find((x) => x.id === node.id);
       if (n) onNodePointerDown(ev, n, el);
@@ -703,17 +775,38 @@
     return el;
   }
 
+  function ensureIlkCornerEl(el, node) {
+    if (el.querySelector(".ilkCorner")) return;
+    const corner = document.createElement("span");
+    corner.className = "ilkCorner";
+    corner.hidden = true;
+    corner.title = "Interlock";
+    corner.setAttribute("aria-label", "Interlock");
+    corner.innerHTML = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <path fill="currentColor" d="M8 1.5a2.75 2.75 0 0 0-2.75 2.75V6H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 6h-.75V4.25A2.75 2.75 0 0 0 8 1.5zm1.25 4.5h-2.5V4.25a1.25 1.25 0 1 1 2.5 0V6zM8 9.25a.9.9 0 0 1 .9.9v1.2a.9.9 0 1 1-1.8 0v-1.2a.9.9 0 0 1 .9-.9z"/>
+    </svg>`;
+    corner.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const n = lastCanvas?.nodes?.find((x) => x.id === node.id);
+      if (n) openInterlocksPanel({ equipmentId: n.id });
+    });
+    el.prepend(corner);
+  }
+
   function patchNodeEl(el, node) {
+    ensureIlkCornerEl(el, node);
     const st = statusClass(node);
     const w = node.w || 140;
     const h = node.h || 80;
     const xrayHit = (xrayMode || workspaceMode === "diagnostic") && (xrayData?.highlightEquipmentIds || []).includes(node.id);
+    const ilkHit = ilkHighlightIds.has(node.id);
     const draggingThis = (drag && (drag.id === node.id || drag.ids?.includes(node.id))) || resize?.id === node.id;
     el.className =
       "eqNode " +
       st +
       (selectedIds.has(node.id) || selected?.id === node.id ? " selected" : "") +
       (xrayHit ? " xrayHit" : "") +
+      (ilkHit ? (ilkHighlightActive ? " ilkHit" : " ilkHit clearHit") : "") +
       (workspaceMode === "engineering" ? " engMode" : "") +
       (isUnverified(node) ? " unverified" : "") +
       (node.locked ? " locked" : "");
@@ -728,6 +821,22 @@
     el.style.transform = rot ? `rotate(${rot}deg)` : "";
     const badge = el.querySelector(".badge");
     if (badge) badge.hidden = st !== "alarm";
+    const ilkCorner = el.querySelector(".ilkCorner");
+    if (ilkCorner) {
+      const mode = ilkCornerByEq.get(node.id); // "active" | "armed" | undefined
+      if (mode) {
+        ilkCorner.hidden = false;
+        ilkCorner.classList.toggle("active", mode === "active");
+        ilkCorner.classList.toggle("armed", mode === "armed");
+        ilkCorner.title =
+          mode === "active"
+            ? "Interlock ACTIVE — equipment inhibited (sim). Click to see inside."
+            : "Interlock armed — covered by model interlock (clear). Click to see inside.";
+      } else {
+        ilkCorner.hidden = true;
+        ilkCorner.classList.remove("active", "armed");
+      }
+    }
     const isTank = /tank/i.test(node.type);
     const fill = el.querySelector(".tankFill");
     if (fill) {
@@ -1104,10 +1213,53 @@
     }
   }
 
+  function fmtXrayValue(v) {
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "object") return JSON.stringify(v);
+    return String(v);
+  }
+
+  function applyXrayHighlights(focusId) {
+    const ids = xrayData?.highlightEquipmentIds || [];
+    ilkHighlightIds = new Set(ids);
+    if (focusId) ilkHighlightIds.add(focusId);
+    ilkHighlightActive = ids.length > 0;
+    if (lastCanvas) syncCanvas(lastCanvas);
+  }
+
+  function renderLiveSignalsTable(live) {
+    const rows = Object.entries(live || {}).map(
+      ([tag, val]) =>
+        `<tr><td>${esc(tag)}</td><td class="liveVal">${esc(fmtLive(val))}</td></tr>`
+    );
+    return `<table class="ioTable"><thead><tr><th>Signal</th><th>Live value</th></tr></thead><tbody>${
+      rows.length ? rows.join("") : `<tr><td colspan="2" class="muted">No live signals on this equipment</td></tr>`
+    }</tbody></table>
+      <details class="advDetails"><summary>Advanced (raw signal map)</summary><pre class="mono">${esc(JSON.stringify(live || {}, null, 2))}</pre></details>`;
+  }
+
+  function pathStepToCond(step) {
+    if (!step) return null;
+    const cond = (xrayData?.conditions || []).find((c) => c.id === step.conditionId);
+    if (cond) return cond;
+    return {
+      label: step.label || step.role || step.step,
+      signalTag: step.tag,
+      equipmentId: step.equipmentId,
+      equipmentTag: step.equipmentTag,
+      status: step.status || step.step,
+      blocking: !!step.blocking,
+      interlockId: step.interlockId || null,
+      rootCauseHint: step.rootCauseHint || step.detail || `Signal path · ${step.step} · ${step.tag}`,
+      detail: step.detail || String(step.tag)
+    };
+  }
+
   async function loadXray(node) {
     if (!node) return null;
     try {
       xrayData = await api(`/api/runtime/xray?equipmentId=${encodeURIComponent(node.id)}`);
+      if (xrayData?.ok) applyXrayHighlights(node.id);
       return xrayData;
     } catch (e) {
       xrayData = { ok: false, error: e.message, conditions: [], chain: [] };
@@ -1115,50 +1267,338 @@
     }
   }
 
+  function findCanvasNodeByRoot(equipmentId, equipmentTag, signalTag) {
+    const nodes = lastCanvas?.nodes || [];
+    if (equipmentId) {
+      const byId = nodes.find((n) => n.id === equipmentId);
+      if (byId) return byId;
+    }
+    if (equipmentTag) {
+      const byTag = nodes.find((n) => n.tag === equipmentTag);
+      if (byTag) return byTag;
+    }
+    if (signalTag) {
+      const prefix = String(signalTag).split(".")[0];
+      return nodes.find((n) => n.tag === prefix) || null;
+    }
+    return null;
+  }
+
+  function applyXrayPathHighlight() {
+    const ids = xrayData?.highlightEquipmentIds || [];
+    if (!ids.length) return;
+    ilkHighlightIds = new Set(ids);
+    ilkHighlightActive = !!xrayData?.inhibited;
+  }
+
+  function enterDiagnosticWorkspace() {
+    studio.classList.add("collapsed-side");
+    studio.classList.remove("collapsed-insp");
+    studio.classList.add("show-inspector");
+    document.getElementById("console")?.classList.add("collapsed");
+  }
+
+  function fitXraySelected() {
+    userViewLocked = false;
+    const nodes = (lastCanvas?.nodes || []).filter((n) => selectedIds.has(n.id) || n.id === selected?.id);
+    fitNodes(nodes.length ? nodes : lastCanvas?.nodes || [], { force: true });
+  }
+
+  function fitXrayChain() {
+    userViewLocked = false;
+    const ids = new Set(xrayData?.highlightEquipmentIds || []);
+    const nodes = (lastCanvas?.nodes || []).filter((n) => ids.has(n.id));
+    fitNodes(nodes.length ? nodes : lastCanvas?.nodes || [], { force: true });
+  }
+
+  function fitXrayAll() {
+    userViewLocked = false;
+    fitNodes(lastCanvas?.nodes || [], { force: true });
+  }
+
+  /**
+   * Whole-picture jump: condition/status click → canvas root cause (+ interlock inside when relevant).
+   */
+  async function goToXrayRootCause(cond, { openInterlock = true, fit = true } = {}) {
+    if (!cond) return;
+    const node = findCanvasNodeByRoot(cond.equipmentId, cond.equipmentTag, cond.signalTag);
+    const hint = cond.rootCauseHint || cond.detail || cond.label;
+    const liveVal =
+      cond.value !== undefined && cond.value !== null
+        ? typeof cond.value === "object"
+          ? JSON.stringify(cond.value)
+          : String(cond.value)
+        : "";
+    logEvent(
+      `Root cause · ${cond.label || cond.step || "signal"}: ${cond.status || ""}` +
+        (liveVal !== "" ? ` = ${liveVal}` : "") +
+        ` — ${hint}`,
+      cond.blocking ? "alarm" : "ok"
+    );
+
+    if (node) {
+      setSelection([node.id], node.id);
+      // Highlight full dependency path from X-Ray payload (not only the single root)
+      applyXrayPathHighlight();
+      if (!ilkHighlightIds.size) {
+        ilkHighlightIds = new Set([node.id]);
+        ilkHighlightActive = !!cond.blocking;
+      }
+      if (lastCanvas) syncCanvas(lastCanvas);
+      if (fit && !userViewLocked) fitNodes([node]);
+      studio.classList.add("show-inspector");
+    }
+
+    // Blocking ESD / high-level → open Interlocks inside for the whole picture
+    if (openInterlock && cond.interlockId) {
+      await openInterlocksPanel({ selectId: cond.interlockId });
+      return;
+    }
+    if (openInterlock && cond.blocking && /esd|level_high/i.test(cond.id || cond.conditionId || "")) {
+      await openInterlocksPanel({
+        equipmentId: cond.equipmentId || node?.id,
+        selectId: cond.interlockId || undefined
+      });
+      return;
+    }
+
+    // Stay in X-Ray on the root-cause equipment
+    if (node) {
+      setWorkspaceMode("diagnostic");
+      inspTab = "xray";
+      syncInspTabs();
+      await loadXray(node);
+      applyXrayPathHighlight();
+      if (lastCanvas) syncCanvas(lastCanvas);
+      renderInspector();
+    }
+  }
+
+  function renderXrayGroupList(items, key) {
+    if (!items?.length) return `<li class="muted">None</li>`;
+    return items
+      .map((c, i) => {
+        const st = String(c.status || "").replace(/\s+/g, "_");
+        const val =
+          c.value !== undefined && c.value !== null
+            ? typeof c.value === "object"
+              ? JSON.stringify(c.value)
+              : String(c.value)
+            : "";
+        return `<li class="condJump ${c.blocking ? "isBlocking" : ""} ${c.status === "WARNING" ? "isWarning" : ""}"
+            data-xray-item="${esc(key)}:${i}"
+            title="${esc(c.rootCauseHint || c.detail || c.label || "")}">
+          <span class="condLabel">${esc(c.label || c.name || "—")}${val !== "" ? ` · ${esc(val)}` : ""}</span>
+          <button type="button" class="stLink st-${esc(st)}" data-xray-item="${esc(key)}:${i}">${esc(c.status || "—")} →</button>
+        </li>`;
+      })
+      .join("");
+  }
+
+  function resolveXrayItem(key, index) {
+    const groups = xrayData?.groups || {};
+    if (key === "conditions") return (xrayData.conditions || [])[index];
+    if (key === "path") return (xrayData.path || xrayData.chain || [])[index];
+    if (key === "warnings") return (groups.warnings || [])[index];
+    if (groups[key]) return groups[key][index];
+    if (key === "interlocksRelated") {
+      const ilk = (xrayData.interlocks || [])[index];
+      if (!ilk) return null;
+      return {
+        label: ilk.name,
+        interlockId: ilk.id,
+        status: "RELATED",
+        blocking: false,
+        rootCauseHint: ilk.actionDescription || ilk.name,
+        detail: ilk.actionDescription
+      };
+    }
+    return null;
+  }
+
   function renderXrayPanel(body, rejectHtml) {
     if (!xrayData || xrayData.ok === false) {
       body.innerHTML = `${rejectHtml}<p class="muted">${esc(xrayData?.error || "Select equipment and open X-Ray.")}</p>`;
       return;
     }
-    const block = xrayData.primaryBlocker;
+    const health = xrayData.health || {};
+    const groups = xrayData.groups || {};
+    const pathSteps = xrayData.path || xrayData.chain || [];
+    const narrative = Array.isArray(xrayData.narrative)
+      ? xrayData.narrative
+      : xrayData.narrative
+        ? [xrayData.narrative]
+        : [];
+    const verifyHints = xrayData.verifyHints || [];
+    const stClass = (s) => String(s || "").replace(/\s+/g, "_");
+    const stateChip = health.state || (xrayData.inhibited ? "INHIBITED" : xrayData.canStart ? "READY" : "—");
+    const blocker = health.primaryBlocker || xrayData.primaryBlocker;
     const head = xrayData.inhibited
-      ? `<div class="xrayBlock"><b>${esc(xrayData.title)}</b><br>${esc(block?.detail || "Inhibited")}</div>`
-      : `<div class="xrayOk"><b>${esc(xrayData.title)}</b></div>`;
-    const conds = (xrayData.conditions || [])
-      .map(
-        (c) => `<li data-tag="${esc(c.signalTag || "")}">
-          <span>${esc(c.label)}</span>
-          <span class="st-${esc(c.status)}">${esc(c.status)}</span>
-        </li>`
-      )
+      ? `<div class="xrayBlock xrayRootLink" data-xray-item="conditions:${(xrayData.conditions || []).findIndex((c) => c.id === blocker?.id)}" title="Jump to root cause">
+          <b>${esc(health.title || xrayData.title)}</b><br>${esc(blocker?.detail || "Inhibited")}
+          <div class="rootCue">Click to jump to root cause →</div>
+        </div>`
+      : `<div class="xrayOk"><b>${esc(health.title || xrayData.title)}</b></div>`;
+
+    const pathHtml = pathSteps
+      .map((c, i) => {
+        const st = stClass(c.status || c.step || c.role);
+        const val =
+          c.value !== undefined && c.value !== null
+            ? typeof c.value === "object"
+              ? JSON.stringify(c.value)
+              : String(c.value)
+            : "";
+        return `<li class="xrayPathStep chainJump ${c.blocking ? "isBlocking" : ""} st-${esc(st)}" data-xray-item="path:${i}"
+            title="${esc(c.rootCauseHint || c.detail || c.tag || "")}">
+          <span class="xrayPathRole">${esc(c.role || c.step)}</span>
+          <span class="xrayPathBody">
+            <b>${esc(c.label || c.tag || c.step)}</b>
+            <span class="muted">${esc(c.tag || "")}${val !== "" ? ` = ${esc(val)}` : ""}${c.address ? ` · ${esc(c.address)}` : ""}</span>
+            ${c.status ? `<span class="stLink st-${esc(st)}">${esc(c.status)}</span>` : ""}
+          </span>
+        </li>`;
+      })
       .join("");
-    const chain = (xrayData.chain || [])
-      .map((c) => `<li><b>${esc(c.step)}</b> ${esc(c.tag)} = ${esc(typeof c.value === "object" ? JSON.stringify(c.value) : c.value)}${c.address ? ` · ${esc(c.address)}` : ""}</li>`)
-      .join("");
-    body.innerHTML = `${rejectHtml}${head}
-      <p class="muted">Click a condition to focus its signal. Highlighted path uses live Runtime values.</p>
-      <ul class="condList">${conds}</ul>
-      <p><b>Signal path</b></p>
-      <ul class="chainSteps">${chain || "<li class='muted'>No chain</li>"}</ul>
-      <div class="cmdRow">
-        <button type="button" id="btnRefreshXray">Refresh X-Ray</button>
-        <button type="button" id="btnFaultValve">Inject stuck valve (sim)</button>
-        <button type="button" id="btnClearFaults">Clear faults</button>
-      </div>
-      <p class="warn">${esc(xrayData.note || "")}</p>`;
-    body.querySelectorAll(".condList li").forEach((li) => {
-      li.onclick = () => {
-        const tag = li.dataset.tag;
-        if (tag) logEvent(`X-Ray focus ${tag}`, "ok");
-      };
+
+    const verifyHtml = verifyHints.length
+      ? `<div class="xrayVerify">
+          <p><b>Verify</b> · real catalog only</p>
+          <ul class="condList">${verifyHints
+            .map(
+              (t, i) => `<li>
+              <span class="condLabel"><b>${esc(t.name || t.id)}</b><br><span class="muted">${esc(t.description || "")}</span></span>
+              <button type="button" class="stLink" data-verify-run="${esc(t.id)}">Run FAT →</button>
+            </li>`
+            )
+            .join("")}</ul>
+          <div class="cmdRow">
+            <button type="button" id="btnOpenVerifyPage">Open P6 Verify</button>
+          </div>
+        </div>`
+      : `<div class="xrayVerify"><p class="muted">No matching Verify tests in catalog for this equipment.</p>
+          <div class="cmdRow"><button type="button" id="btnOpenVerifyPage">Open P6 Verify</button></div></div>`;
+
+    body.innerHTML = `${rejectHtml}
+      <div class="xrayWorkspace">
+        <div class="xrayToolbar cmdRow">
+          <button type="button" id="btnRefreshXray">Refresh</button>
+          <button type="button" id="btnXrayFitSel" title="Fit selected">Fit selected</button>
+          <button type="button" id="btnXrayFitChain" title="Fit dependency chain">Fit chain</button>
+          <button type="button" id="btnXrayFitAll" title="Fit all">Fit all</button>
+        </div>
+        <section class="xraySection">
+          <h4 class="xraySectionTitle">Equipment Health</h4>
+          <div class="xrayChips">
+            <span class="xrayChip st-${esc(stClass(stateChip))}">${esc(stateChip)}</span>
+            <span class="xrayChip">${esc(xrayData.equipment?.tag || "")} · ${esc(health.operatingState || xrayData.equipment?.operatingState || "—")}</span>
+            <span class="xrayChip">${health.blockingCount ?? (xrayData.conditions || []).filter((c) => c.blocking).length} blocking</span>
+            <span class="xrayChip">${health.clearCount ?? "—"} clear</span>
+            ${(health.warningCount || 0) ? `<span class="xrayChip warnChip">${health.warningCount} warn</span>` : ""}
+          </div>
+          ${head}
+        </section>
+        <section class="xraySection">
+          <h4 class="xraySectionTitle">Dashboard</h4>
+          <div class="xrayDashGrid">
+            <div><p class="xrayGroupLabel">Feedback</p><ul class="condList">${renderXrayGroupList(groups.feedback, "feedback")}</ul></div>
+            <div><p class="xrayGroupLabel">Permissives</p><ul class="condList">${renderXrayGroupList(groups.permissives, "permissives")}</ul></div>
+            <div><p class="xrayGroupLabel">Blockers</p><ul class="condList">${renderXrayGroupList(groups.blockers, "blockers")}</ul></div>
+            <div><p class="xrayGroupLabel">Interlocks</p><ul class="condList">${renderXrayGroupList(groups.interlocks, "interlocks")}</ul></div>
+            <div><p class="xrayGroupLabel">Warnings</p><ul class="condList">${renderXrayGroupList(groups.warnings, "warnings")}</ul></div>
+          </div>
+        </section>
+        <section class="xraySection">
+          <h4 class="xraySectionTitle">Signal Trace</h4>
+          <p class="muted">Click a step to select equipment and highlight the dependency path.</p>
+          <ol class="xrayPath">${pathHtml || "<li class='muted'>No path</li>"}</ol>
+        </section>
+        <section class="xraySection">
+          <h4 class="xraySectionTitle">Diagnostic Explanation</h4>
+          <div class="xrayNarrative">${narrative.map((p) => `<p>${esc(p)}</p>`).join("") || "<p class='muted'>No narrative</p>"}</div>
+          <p class="warn">${esc(xrayData.note || "")}</p>
+        </section>
+        <section class="xraySection">
+          <div class="cmdRow">
+            <button type="button" id="btnFaultValve">Inject stuck valve (sim)</button>
+            <button type="button" id="btnClearFaults">Clear faults</button>
+            <button type="button" id="btnOpenIlkFromXray">Open Interlocks</button>
+          </div>
+          ${verifyHtml}
+        </section>
+        <details class="xrayAdvanced">
+          <summary>Advanced signals</summary>
+          <p class="muted">Raw equipment signals and related tags from the live runtime.</p>
+          <pre class="xrayAdvPre">${esc(JSON.stringify({
+            equipmentSignals: xrayData.equipmentSignals || [],
+            related: xrayData.related || [],
+            conditions: xrayData.conditions || []
+          }, null, 2))}</pre>
+        </details>
+      </div>`;
+
+    const jumpItem = (key, index) => {
+      const item = resolveXrayItem(key, index);
+      if (!item) return;
+      if (item.interlockId && !item.equipmentId && !item.signalTag && key === "interlocks") {
+        openInterlocksPanel({ selectId: item.interlockId });
+        return;
+      }
+      goToXrayRootCause(
+        {
+          id: item.conditionId || item.id,
+          conditionId: item.conditionId || item.id,
+          label: item.label || item.role || item.step,
+          signalTag: item.signalTag || item.tag,
+          equipmentId: item.equipmentId,
+          equipmentTag: item.equipmentTag,
+          status: item.status,
+          value: item.value,
+          blocking: !!item.blocking,
+          interlockId: item.interlockId,
+          rootCauseHint: item.rootCauseHint || item.detail || item.label,
+          detail: item.detail
+        },
+        { openInterlock: !!(item.interlockId && item.blocking) }
+      ).catch((e) => logEvent(e.message, "alarm"));
+    };
+
+    body.querySelectorAll("[data-xray-item]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const raw = el.getAttribute("data-xray-item") || "";
+        const colon = raw.lastIndexOf(":");
+        if (colon < 0) return;
+        jumpItem(raw.slice(0, colon), Number(raw.slice(colon + 1)));
+      });
+    });
+
+    body.querySelectorAll("[data-verify-run]").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const testId = btn.getAttribute("data-verify-run");
+        runFat(testId).catch((e) => logEvent(e.message, "alarm"));
+      });
+    });
+    document.getElementById("btnOpenVerifyPage")?.addEventListener("click", () => {
+      openEmbed("/verify.html", "P6 Verify");
+    });
+    document.getElementById("btnOpenIlkFromXray")?.addEventListener("click", () => {
+      openInterlocksPanel({ equipmentId: selected?.id });
     });
     document.getElementById("btnRefreshXray").onclick = async () => {
       if (selected) {
         await loadXray(selected);
+        applyXrayPathHighlight();
         renderCanvas(lastCanvas);
         renderInspector();
       }
     };
+    document.getElementById("btnXrayFitSel").onclick = () => fitXraySelected();
+    document.getElementById("btnXrayFitChain").onclick = () => fitXrayChain();
+    document.getElementById("btnXrayFitAll").onclick = () => fitXrayAll();
     document.getElementById("btnFaultValve").onclick = async () => {
       // Stuck closed feedback on VALVE opened address I1
       await api("/api/fault", {
@@ -1169,6 +1609,7 @@
       logEvent("Fault injected: VALVE opened feedback stuck FALSE (sim)", "alarm");
       if (selected) {
         await loadXray(selected);
+        applyXrayPathHighlight();
         renderCanvas(lastCanvas);
         renderInspector();
       }
@@ -1180,6 +1621,7 @@
       logEvent("Faults cleared (I1)", "ok");
       if (selected) {
         await loadXray(selected);
+        applyXrayPathHighlight();
         renderCanvas(lastCanvas);
         renderInspector();
       }
@@ -1339,8 +1781,11 @@
       return;
     }
     if (panDrag) {
-      panX = panDrag.ox + (ev.clientX - panDrag.x);
-      panY = panDrag.oy + (ev.clientY - panDrag.y);
+      const nx = panDrag.ox + (ev.clientX - panDrag.x);
+      const ny = panDrag.oy + (ev.clientY - panDrag.y);
+      if (Math.abs(nx - panX) > 1 || Math.abs(ny - panY) > 1) userViewLocked = true;
+      panX = nx;
+      panY = ny;
       applyTransform();
     }
   }
@@ -1410,6 +1855,7 @@
   });
   viewport.addEventListener("wheel", (ev) => {
     ev.preventDefault();
+    userViewLocked = true;
     const rect = viewport.getBoundingClientRect();
     const mx = ev.clientX - rect.left;
     const my = ev.clientY - rect.top;
@@ -1476,8 +1922,9 @@
     await refreshProject();
   }
 
-  function fitNodes(nodes) {
+  function fitNodes(nodes, { force = false } = {}) {
     if (!nodes?.length) return;
+    if (userViewLocked && !force) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of nodes) {
       minX = Math.min(minX, n.x);
@@ -1485,24 +1932,40 @@
       maxX = Math.max(maxX, n.x + (n.w || 160));
       maxY = Math.max(maxY, n.y + (n.h || 90));
     }
-    const vw = viewport.clientWidth;
-    const vh = viewport.clientHeight;
-    const bw = Math.max(80, maxX - minX + 80);
-    const bh = Math.max(80, maxY - minY + 80);
-    scale = Math.min(1.8, Math.max(0.3, Math.min(vw / bw, vh / bh) * 0.9));
-    panX = (vw - bw * scale) / 2 - minX * scale + 20;
-    panY = (vh - bh * scale) / 2 - minY * scale + 20;
+    const vw = Math.max(120, viewport.clientWidth || 0);
+    const vh = Math.max(120, viewport.clientHeight || 0);
+    const pad = 48;
+    const bw = Math.max(80, maxX - minX + pad * 2);
+    const bh = Math.max(80, maxY - minY + pad * 2);
+    // Prefer fitting the whole plant into the visible viewport
+    scale = Math.min(1.6, Math.max(0.18, Math.min(vw / bw, vh / bh) * 0.92));
+    panX = (vw - bw * scale) / 2 - (minX - pad) * scale;
+    panY = (vh - bh * scale) / 2 - (minY - pad) * scale;
     applyTransform();
     if (lastCanvas) updateCanvasMeta(lastCanvas);
   }
 
-  function fitView() {
-    fitNodes(lastCanvas?.nodes || []);
+  function fitView(opts) {
+    if (opts?.force || !userViewLocked) userViewLocked = false;
+    fitNodes(lastCanvas?.nodes || [], { force: true, ...opts });
+  }
+
+  /** Fit after layout paints — boot often runs before the viewport has real size. */
+  function fitViewSoon(passes = 3, opts) {
+    if (userViewLocked && !opts?.force) return;
+    let left = passes;
+    const step = () => {
+      fitView({ force: true, ...opts });
+      left -= 1;
+      if (left > 0) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   function zoomToSelection() {
+    userViewLocked = false;
     const nodes = (lastCanvas?.nodes || []).filter((n) => selectedIds.has(n.id));
-    fitNodes(nodes.length ? nodes : lastCanvas?.nodes || []);
+    fitNodes(nodes.length ? nodes : lastCanvas?.nodes || [], { force: true });
   }
 
   async function duplicateEquipment(node) {
@@ -1611,9 +2074,13 @@
     const sub = document.getElementById("inspSub");
     const body = document.getElementById("inspBody");
     if (!selected) {
-      title.textContent = "Select equipment";
-      sub.textContent = "Click a node on the map";
-      body.innerHTML = `<p class="muted">No selection.</p>`;
+      if (workspaceMode === "diagnostic") {
+        renderInspectorEmptyLogic();
+      } else {
+        title.textContent = "Select equipment";
+        sub.textContent = "Click a node on the map";
+        body.innerHTML = `<p class="muted">No selection.</p>`;
+      }
       return;
     }
     // refresh selected live from canvas
@@ -1647,14 +2114,19 @@
         </div>
         <div class="cmdRow">
           <button type="button" id="btnSaveIdentity">Save tag / type</button>
-          <button type="button" id="btnApproveEq">Mark approved</button>
-          <button type="button" id="btnDeleteEq">Delete</button>
+          <button type="button" id="btnApproveEq">Add approved equipment</button>
+          <button type="button" id="btnDeleteEq">Delete equipment</button>
         </div>
         ${tankForm}
-        <pre>${esc(JSON.stringify({
-        tag: selected.tag, type: selected.type, dataClass: selected.dataClass, operatingState: selected.operatingState, properties: props, live
-      }, null, 2))}</pre>
-        <p class="warn">Edits update the canonical model and rebind Runtime automatically. Simulated controls only — not certified physical safety.</p>`;
+        <dl class="inspKv">
+          <dt>Data class</dt><dd>${esc(selected.dataClass || "—")}</dd>
+          <dt>Operating state</dt><dd>${esc(selected.operatingState || "—")}</dd>
+          <dt>Live signals</dt><dd>${Object.keys(live).length} on this equipment</dd>
+        </dl>
+        <details class="advDetails"><summary>Advanced (model record)</summary><pre class="mono">${esc(JSON.stringify({
+        tag: selected.tag, type: selected.type, dataClass: selected.dataClass, operatingState: selected.operatingState, properties: props
+      }, null, 2))}</pre></details>
+        <p class="warn">Edits update the simulation model and rebind Runtime automatically. Simulated controls only — not certified physical safety.</p>`;
       document.getElementById("btnSaveIdentity").onclick = () => {
         reworkEquipment(selected, {
           tag: document.getElementById("propTag").value,
@@ -1679,6 +2151,11 @@
           });
         };
       }
+    } else if (inspTab === "interlocks") {
+      body.innerHTML = `${rejectHtml}<p class="muted">Loading interlocks…</p>`;
+      loadInterlocks({ equipmentId: selected.id }).then(() => {
+        renderInspectorInterlocks(body, rejectHtml);
+      });
     } else if (inspTab === "xray") {
       if (!xrayData || xrayData.equipment?.id !== selected.id) {
         body.innerHTML = `${rejectHtml}<p class="muted">Loading X-Ray…</p>`;
@@ -1690,20 +2167,34 @@
         renderXrayPanel(body, rejectHtml);
       }
     } else if (inspTab === "io") {
-      body.innerHTML = `${rejectHtml}<pre>${esc(JSON.stringify(live, null, 2))}</pre>`;
+      body.innerHTML = `${rejectHtml}${renderLiveSignalsTable(live)}`;
     } else if (inspTab === "alarms") {
       const alarms = [];
       if (Object.entries(live).some(([k, v]) => /Healthy/i.test(k) && v === false)) alarms.push("E-STOP ACTIVE (sim)");
       if (Object.entries(live).some(([k, v]) => /Fault/i.test(k) && v === true)) alarms.push("FAULT");
       if (Object.entries(live).some(([k, v]) => /High/i.test(k) && v === true)) alarms.push("LEVEL HIGH");
       if (lastCanvas?.mem?.M1) alarms.push("TRIP LATCH M1");
-      body.innerHTML = `${rejectHtml}<pre>${esc(alarms.length ? alarms.join("\n") : "No active alarms")}</pre>`;
+      const eng = [];
+      if (lastModelValidation?.issues?.length) {
+        for (const iss of lastModelValidation.issues.slice(0, 12)) {
+          if (iss.severity === "error" || iss.severity === "warning") {
+            eng.push(`[MODEL ${iss.severity.toUpperCase()}] ${iss.code}: ${iss.message}`);
+          }
+        }
+      }
+      const blocks = [];
+      if (alarms.length) blocks.push("Process (sim):\n" + alarms.join("\n"));
+      else blocks.push("Process (sim):\nNo active alarms");
+      if (eng.length) blocks.push("Engineering validation:\n" + eng.join("\n"));
+      else if (lastModelValidation?.ok) blocks.push("Engineering validation:\nNo errors or warnings");
+      body.innerHTML = `${rejectHtml}<pre>${esc(blocks.join("\n\n"))}</pre>`;
     } else {
       const cmds = signalCommands(selected);
       body.innerHTML = `${rejectHtml}
         <div class="cmdRow">${cmds.map((c, i) => `<button type="button" data-cmd="${i}">${esc(c.label)}</button>`).join("") || "<span class='muted'>No commands</span>"}</div>
-        <pre>${esc(JSON.stringify(live, null, 2))}</pre>
-        <p class="warn">Commands use POST /api/runtime/command with permissive checks.</p>`;
+        ${renderLiveSignalsTable(live)}
+        ${workspaceMode === "diagnostic" ? logicObservabilityHtml() : ""}
+        <p class="warn">Commands use Runtime permissive checks (simulation).</p>`;
       body.querySelectorAll("[data-cmd]").forEach((btn) => {
         btn.onclick = () => {
           const c = cmds[Number(btn.dataset.cmd)];
@@ -1772,36 +2263,54 @@
     } catch (_) { /* optional */ }
   }
 
-  async function runFat() {
-    logEvent("P6 Verify: running P101_ESTOP_SHUTDOWN…");
+  function appendVerifyResult({ testName, testId, pass, assertions, error }) {
     const verifyLog = document.getElementById("verifyLog");
+    if (!verifyLog) return;
+    const wrap = document.createElement("div");
+    const html = window.P6VerifyUI
+      ? P6VerifyUI.renderVerifyRunRow({ testName, testId, pass, assertions, error })
+      : `<div class="verifyRow ${pass ? "ok" : "alarm"}">${esc(testName || testId)} ${pass ? "PASS" : "FAIL"}</div>`;
+    wrap.innerHTML = html;
+    verifyLog.prepend(wrap.firstElementChild);
+    document.querySelector('[data-actab="verify"]')?.click();
+    document.getElementById("console")?.classList.remove("collapsed");
+  }
+
+  async function runFat(testId) {
+    // onclick passes Event — only accept real catalog string ids
+    const id = typeof testId === "string" && testId ? testId : "P101_ESTOP_SHUTDOWN";
+    let testName = id;
+    try {
+      const cat = await api("/api/verify/tests");
+      const match = (cat.tests || []).find((t) => t.id === id);
+      if (match?.name) testName = match.name;
+    } catch (_) { /* catalog optional */ }
+    logEvent(`P6 Verify: running ${testName}…`);
     try {
       const r = await api("/api/verify/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}"
+        body: JSON.stringify({ testId: id })
       });
       const pass = !!(r.pass || r.result?.pass);
-      const line = `FAT ${pass ? "PASS" : "FAIL"} — ${r.testId || r.result?.testId || "P101_ESTOP_SHUTDOWN"}`;
+      const assertions = r.result?.assertions || r.assertions || [];
+      const line = `${testName} ${pass ? "PASS" : "FAIL"}`;
       logEvent(line, pass ? "ok" : "alarm");
-      if (verifyLog) {
-        const row = document.createElement("div");
-        row.className = "ev " + (pass ? "ok" : "alarm");
-        row.textContent = line;
-        verifyLog.prepend(row);
-      }
-      if (r.assertions || r.result?.assertions) {
-        logEvent(JSON.stringify(r.assertions || r.result.assertions));
-      }
+      appendVerifyResult({ testName, testId: id, pass, assertions });
     } catch (e) {
-      logEvent("FAT error: " + e.message, "alarm");
-      if (verifyLog) {
-        const row = document.createElement("div");
-        row.className = "ev alarm";
-        row.textContent = "FAT error: " + e.message;
-        verifyLog.prepend(row);
-      }
+      logEvent("Run Test error: " + e.message, "alarm");
+      appendVerifyResult({ testName, testId: id, pass: false, error: e.message });
     }
+  }
+
+  function connectCard(title, status, detail, honest) {
+    const st = String(status || "unknown").toLowerCase();
+    return `<article class="connectCard ${esc(st)}">
+      <h4>${esc(title)}</h4>
+      <p class="connectStatus">${esc(status || "—")}</p>
+      <p class="muted">${esc(detail || "")}</p>
+      ${honest ? `<p class="warn connectHonest">${honest}</p>` : ""}
+    </article>`;
   }
 
   async function refreshConnect() {
@@ -1810,7 +2319,28 @@
       api("/api/connect/mqtt"),
       api("/api/connect/engineering/status")
     ]);
-    document.getElementById("connectOut").textContent = JSON.stringify({ opcua: opc, mqtt, engineering: eng }, null, 2);
+    const cards = document.getElementById("connectCards");
+    if (cards) {
+      const opcSt = opc.connected ? "Connected" : opc.enabled === false ? "Disabled" : "Not connected";
+      const mqttSt = mqtt.connected ? "Connected" : mqtt.enabled === false ? "Disabled" : "Not connected";
+      const engSt = eng.approved ? "Approved for export" : eng.pending ? "Pending review" : "Engineering gate";
+      cards.innerHTML =
+        connectCard(
+          "OPC UA / Ignition",
+          opcSt,
+          opc.endpoint || opc.message || "Optional profile — not required for Studio + Runtime.",
+          "Live Ignition tags are not proven in this build unless you validate with the ignition compose profile."
+        ) +
+        connectCard("MQTT", mqttSt, mqtt.broker || mqtt.topic || "Observation / bridge when configured.") +
+        connectCard(
+          "Engineering export",
+          engSt,
+          `Project ${eng.projectId || "—"} · model v${eng.modelVersion ?? "—"}`,
+          eng.approved ? "" : "Exports stay gated until engineering approval — P6 model remains authoritative."
+        );
+    }
+    const out = document.getElementById("connectOut");
+    if (out) out.textContent = JSON.stringify({ opcua: opc, mqtt, engineering: eng }, null, 2);
   }
 
   function setView(v) {
@@ -1823,6 +2353,7 @@
     if (map || connect) {
       closeEmbed();
       closeIngestPanel();
+      closeInterlocksPanel({ keepHighlight: connect ? false : true });
     }
     document.querySelectorAll(".navItem[data-view]").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-view") === v);
@@ -1833,6 +2364,7 @@
   function openEmbed(url, title) {
     if (!toolPanel || !toolFrame || !url) return;
     closeIngestPanel();
+    closeInterlocksPanel({ keepHighlight: false });
     view = "tool";
     connectPanel.classList.add("hidden");
     viewport.style.display = "none";
@@ -1938,18 +2470,16 @@
   }
 
   function reportScenarioDiff(name, changes) {
-    const verifyLog = document.getElementById("verifyLog");
     const head = `Scenario ${name}: ${changes.length} signal change(s)`;
     logEvent(head, changes.length ? "ok" : "");
-    if (verifyLog) {
-      const row = document.createElement("div");
-      row.className = "ev ok";
-      row.innerHTML = `<b>${esc(head)}</b><br>${changes.slice(0, 12).map((c) =>
-        `${esc(c.tag)}: ${esc(String(c.before))} → ${esc(String(c.after))}`
-      ).join("<br>") || "<span class='muted'>No signal deltas</span>"}`;
-      verifyLog.prepend(row);
-    }
-    document.querySelector('[data-actab="verify"]')?.click();
+    const row = document.createElement("div");
+    row.className = "ev ok";
+    row.innerHTML = `<b>${esc(head)}</b> · <span class="muted">live Runtime only — not Verify FAT</span><br>${changes.slice(0, 12).map((c) =>
+      `${esc(c.tag)}: ${esc(String(c.before))} → ${esc(String(c.after))}`
+    ).join("<br>") || "<span class='muted'>No signal deltas</span>"}`;
+    consoleLog.prepend(row);
+    document.querySelector('[data-actab="events"]')?.click();
+    document.getElementById("console")?.classList.remove("collapsed");
   }
 
   async function runScenario(name) {
@@ -2054,7 +2584,9 @@
     if (inspTab === "xray" && selected) {
       xrayMode = true;
       studio.classList.add("xray-mode");
+      enterDiagnosticWorkspace();
       loadXray(selected).then(() => {
+        applyXrayPathHighlight();
         renderCanvas(lastCanvas);
         renderInspector();
       });
@@ -2063,9 +2595,18 @@
     }
   };
 
-  document.getElementById("btnToggleSide").onclick = () => studio.classList.toggle("collapsed-side");
-  document.getElementById("btnToggleInsp").onclick = () => studio.classList.toggle("collapsed-insp");
-  document.getElementById("btnToggleConsole").onclick = () => document.getElementById("console").classList.toggle("collapsed");
+  document.getElementById("btnToggleSide").onclick = () => {
+    studio.classList.toggle("collapsed-side");
+    fitViewSoon(2);
+  };
+  document.getElementById("btnToggleInsp").onclick = () => {
+    studio.classList.toggle("collapsed-insp");
+    fitViewSoon(2);
+  };
+  document.getElementById("btnToggleConsole").onclick = () => {
+    document.getElementById("console").classList.toggle("collapsed");
+    fitViewSoon(2);
+  };
   document.getElementById("btnClearLog").onclick = () => {
     consoleLog.innerHTML = "";
     const a = document.getElementById("alarmLog");
@@ -2291,6 +2832,8 @@
       hideCtxMenu();
       setPlayback(false);
       closeEmbed();
+      closeIngestPanel();
+      closeInterlocksPanel();
       hideCtxMenu();
       selectedIds.clear();
       selected = null;
@@ -2313,6 +2856,244 @@
   });
   updateUndoButtons();
 
+  // —— Studio Interlocks (see inside: conditions → action → inhibits) ——
+  const interlocksPanel = document.getElementById("interlocksPanel");
+
+  function rebuildIlkCornerMap(items) {
+    const next = new Map();
+    for (const ilk of items || []) {
+      const mode = ilk.active ? "active" : "armed";
+      for (const id of ilk.highlightEquipmentIds || []) {
+        if (!id) continue;
+        // active wins over armed
+        if (next.get(id) === "active") continue;
+        next.set(id, mode);
+      }
+      for (const inh of ilk.inhibits || []) {
+        if (!inh.equipmentId) continue;
+        if (next.get(inh.equipmentId) === "active") continue;
+        next.set(inh.equipmentId, mode);
+      }
+    }
+    ilkCornerByEq = next;
+  }
+
+  async function loadInterlocks(opts = {}) {
+    const q = opts.equipmentId ? `?equipmentId=${encodeURIComponent(opts.equipmentId)}` : "";
+    interlocksData = await api("/api/runtime/interlocks" + q);
+    // Corner badges always reflect the full project picture
+    if (opts.equipmentId) {
+      try {
+        const full = await api("/api/runtime/interlocks");
+        rebuildIlkCornerMap(full.interlocks);
+      } catch (_) {
+        rebuildIlkCornerMap(interlocksData?.interlocks);
+      }
+    } else {
+      rebuildIlkCornerMap(interlocksData?.interlocks);
+    }
+    if (lastCanvas) {
+      for (const n of lastCanvas.nodes || []) {
+        const el = nodeEls.get(n.id);
+        if (el) patchNodeEl(el, n);
+      }
+    }
+    return interlocksData;
+  }
+
+  async function refreshIlkCorners() {
+    try {
+      const full = await api("/api/runtime/interlocks");
+      rebuildIlkCornerMap(full.interlocks);
+      if (lastCanvas) {
+        for (const n of lastCanvas.nodes || []) {
+          const el = nodeEls.get(n.id);
+          if (el) patchNodeEl(el, n);
+        }
+      }
+    } catch (_) { /* optional */ }
+  }
+
+  function applyInterlockHighlight(ilk) {
+    ilkHighlightIds = new Set(ilk?.highlightEquipmentIds || []);
+    ilkHighlightActive = !!ilk?.active;
+    if (lastCanvas) syncCanvas(lastCanvas);
+  }
+
+  function clearInterlockHighlight() {
+    ilkHighlightIds = new Set();
+    ilkHighlightActive = false;
+    if (lastCanvas) syncCanvas(lastCanvas);
+  }
+
+  function renderIlkList() {
+    const host = document.getElementById("ilkList");
+    const count = document.getElementById("ilkCount");
+    if (!host) return;
+    const items = interlocksData?.interlocks || [];
+    if (count) {
+      count.textContent = items.length
+        ? `(${items.length} · ${interlocksData.activeCount || 0} active)`
+        : "";
+    }
+    if (!items.length) {
+      host.innerHTML = `<p class="muted">No interlocks in the model yet. Ingest ESD/level tags or use the tank-transfer demo.</p>`;
+      return;
+    }
+    host.innerHTML = items.map((i) => `
+      <button type="button" class="ilkRow ${i.id === selectedInterlockId ? "activeSel" : ""}" data-id="${esc(i.id)}">
+        <span class="ilkName">${esc(i.name)}<span class="ilkBadge ${esc(i.status)}">${esc(i.status)}</span></span>
+        <span class="ilkMeta">${esc(i.actionDescription || "").slice(0, 120)}</span>
+      </button>`).join("");
+    host.querySelectorAll(".ilkRow").forEach((btn) => {
+      btn.onclick = () => selectInterlock(btn.dataset.id);
+    });
+  }
+
+  function renderIlkDetail() {
+    const host = document.getElementById("ilkDetail");
+    const title = document.getElementById("ilkDetailTitle");
+    const sub = document.getElementById("ilkDetailSub");
+    if (!host) return;
+    const ilk = (interlocksData?.interlocks || []).find((i) => i.id === selectedInterlockId);
+    if (!ilk) {
+      if (title) title.textContent = "Select an interlock";
+      if (sub) sub.textContent = "See the condition chain and what equipment it inhibits — the whole picture after document promote.";
+      host.innerHTML = `<p class="muted">Pick an interlock on the left to open the inside view.</p>
+        <p class="warn">${esc(interlocksData?.note || "")}</p>`;
+      return;
+    }
+    if (title) title.textContent = ilk.name;
+    if (sub) {
+      sub.textContent = `${ilk.status} · ${ilk.dataClass || "—"} · ${(ilk.conditions || []).length} condition(s) · ${(ilk.inhibits || []).length} inhibit(s)`;
+    }
+    const chain = (ilk.chain || [])
+      .map((c) => `<li class="${esc(c.status || "")}"><b>${esc(c.step)}</b> ${esc(c.tag)}
+        <div class="muted">${esc(c.detail || "")}${c.value != null && c.value !== "" ? ` · value=${esc(c.value)}` : ""}</div></li>`)
+      .join("");
+    const inhibits = (ilk.inhibits || [])
+      .map((i) => `<li>${esc(i.tag)} <span class="muted">${esc(i.type)}</span></li>`)
+      .join("");
+    host.innerHTML = `
+      <p>${esc(ilk.actionDescription || "")}</p>
+      <p><b>Inside chain</b> — condition → action → inhibited equipment</p>
+      <ul class="ilkChain">${chain || "<li class='muted'>No chain</li>"}</ul>
+      <p><b>Inhibits</b></p>
+      <ul class="ilkChain">${inhibits || "<li class='muted'>None</li>"}</ul>
+      <div class="cmdRow">
+        <button type="button" id="btnIlkHighlight">Highlight on canvas</button>
+        <button type="button" id="btnIlkTestEstope" ${/ESD|ESTOP/i.test(ilk.name) ? "" : "hidden"}>Force E-stop trip (sim)</button>
+      </div>
+      <p class="warn">${esc(interlocksData?.note || "")}</p>`;
+    document.getElementById("btnIlkHighlight")?.addEventListener("click", () => {
+      applyInterlockHighlight(ilk);
+      closeInterlocksPanel({ keepHighlight: true });
+      fitViewSoon(2);
+      logEvent(`Interlock ${ilk.name} highlighted on canvas (${ilk.status})`, ilk.active ? "alarm" : "ok");
+    });
+    document.getElementById("btnIlkTestEstope")?.addEventListener("click", async () => {
+      try {
+        await sendCommand("ESD-101.Healthy", false);
+        await loadInterlocks();
+        selectInterlock(ilk.id);
+        logEvent("E-stop trip forced (sim) — refresh Interlocks to see ACTIVE chain", "alarm");
+      } catch (e) {
+        logEvent(e.message, "alarm");
+      }
+    });
+  }
+
+  function selectInterlock(id) {
+    selectedInterlockId = id;
+    const ilk = (interlocksData?.interlocks || []).find((i) => i.id === id);
+    applyInterlockHighlight(ilk);
+    renderIlkList();
+    renderIlkDetail();
+  }
+
+  function renderInspectorInterlocks(body, rejectHtml) {
+    const items = interlocksData?.interlocks || [];
+    if (!items.length) {
+      body.innerHTML = `${rejectHtml}<p class="muted">No interlocks involve this equipment.</p>
+        <div class="cmdRow"><button type="button" id="btnOpenIlkPanel">Browse all Interlocks</button></div>`;
+      document.getElementById("btnOpenIlkPanel")?.addEventListener("click", () => openInterlocksPanel());
+      return;
+    }
+    body.innerHTML = `${rejectHtml}
+      <p class="muted">${items.length} interlock(s) · click to open inside view</p>
+      <ul class="condList">${items.map((i) =>
+        `<li data-ilkid="${esc(i.id)}"><span>${esc(i.name)}</span><span class="st-${i.active ? "fail" : "ok"}">${esc(i.status)}</span></li>`
+      ).join("")}</ul>
+      <div class="cmdRow"><button type="button" id="btnOpenIlkPanel">Open Interlocks panel</button></div>
+      <p class="warn">${esc(interlocksData?.note || "")}</p>`;
+    body.querySelectorAll("[data-ilkid]").forEach((li) => {
+      li.onclick = () => openInterlocksPanel({ selectId: li.dataset.ilkid });
+    });
+    document.getElementById("btnOpenIlkPanel")?.addEventListener("click", () => {
+      openInterlocksPanel({ equipmentId: selected?.id });
+    });
+  }
+
+  async function openInterlocksPanel(opts = {}) {
+    closeEmbed();
+    closeIngestPanel();
+    interlocksPanel?.classList.remove("hidden");
+    view = "interlocks";
+    document.getElementById("viewTitle").textContent = "Interlocks";
+    document.querySelectorAll(".navItem[data-view]").forEach((el) => el.classList.remove("active"));
+    document.getElementById("navInterlocks")?.classList.add("active");
+    try {
+      await loadInterlocks(opts.equipmentId ? { equipmentId: opts.equipmentId } : {});
+      // If filtered empty, reload full list
+      if (opts.equipmentId && !(interlocksData?.interlocks || []).length) {
+        await loadInterlocks();
+      }
+      renderIlkList();
+      if (opts.selectId) selectInterlock(opts.selectId);
+      else if ((interlocksData?.interlocks || []).length) {
+        selectInterlock(interlocksData.interlocks[0].id);
+      } else {
+        renderIlkDetail();
+      }
+      logEvent(
+        `Interlocks: ${interlocksData?.count || 0} in model · ${interlocksData?.activeCount || 0} active (sim)`,
+        interlocksData?.activeCount ? "alarm" : "ok"
+      );
+    } catch (e) {
+      logEvent("Interlocks failed: " + e.message, "alarm");
+    }
+  }
+
+  function closeInterlocksPanel({ keepHighlight = false } = {}) {
+    interlocksPanel?.classList.add("hidden");
+    document.getElementById("navInterlocks")?.classList.remove("active");
+    if (!keepHighlight) {
+      selectedInterlockId = null;
+      clearInterlockHighlight();
+    }
+    if (view === "interlocks") {
+      view = "map";
+      viewport.style.display = "";
+      document.getElementById("viewTitle").textContent = "Engineering map";
+      document.querySelector('.navItem[data-view="map"]')?.classList.add("active");
+    }
+  }
+
+  document.getElementById("navInterlocks")?.addEventListener("click", () => openInterlocksPanel());
+  document.getElementById("btnCloseInterlocks")?.addEventListener("click", () => closeInterlocksPanel());
+  document.getElementById("btnIlkRefresh")?.addEventListener("click", async () => {
+    await loadInterlocks();
+    renderIlkList();
+    if (selectedInterlockId) selectInterlock(selectedInterlockId);
+    else renderIlkDetail();
+  });
+  document.getElementById("btnIlkShowMap")?.addEventListener("click", () => {
+    const ilk = (interlocksData?.interlocks || []).find((i) => i.id === selectedInterlockId);
+    if (ilk) applyInterlockHighlight(ilk);
+    closeInterlocksPanel({ keepHighlight: true });
+    fitViewSoon(2);
+  });
+
   // —— In-Studio ingest (P&ID / docs) ——
   let ingestCandidates = [];
   let ingestLast = null;
@@ -2322,6 +3103,7 @@
 
   function openIngestPanel() {
     closeEmbed();
+    closeInterlocksPanel({ keepHighlight: false });
     connectPanel.classList.add("hidden");
     viewport.style.display = "none";
     if (toolPanel) toolPanel.classList.add("hidden");
@@ -2347,16 +3129,35 @@
   function renderIngestList() {
     const host = document.getElementById("ingestList");
     if (!host) return;
-    host.innerHTML = ingestCandidates.map((c, i) => `
-      <div class="ingestCand ${c.status || ""} ${i === ingestSelected ? "active" : ""}" data-i="${i}">
+    if (!ingestCandidates.length) {
+      host.innerHTML = `<p class="muted">No equipment rows yet — complete STEP 1 (extract document).</p>`;
+      return;
+    }
+    const hideDemo = !!document.getElementById("ingestHideDemo")?.checked;
+    const visible = ingestCandidates
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.status !== "deleted" && (!hideDemo || c.tagOrigin !== "demo_reference"));
+    const head = `<div class="ingestRow ingestHead"><span>Include</span><span>Tag</span><span>Type</span><span>Origin</span><span>Conf</span></div>`;
+    host.innerHTML =
+      head +
+      visible
+        .map(
+          ({ c, i }) => `
+      <div class="ingestCand ingestRow ${c.status || ""} ${i === ingestSelected ? "active" : ""}" data-i="${i}">
         <input type="checkbox" data-inc="${i}" ${c.include || c.status === "confirmed" ? "checked" : ""} ${c.status === "deleted" ? "disabled" : ""} />
         <input type="text" data-tag="${i}" value="${esc(c.tag)}" ${c.status === "deleted" ? "disabled" : ""} />
         <select data-type="${i}" ${c.status === "deleted" ? "disabled" : ""}>
           ${LIB_TYPES.map((t) => `<option value="${esc(t.type)}" ${c.type === t.type ? "selected" : ""}>${esc(t.label)}</option>`).join("")}
           <option value="${esc(c.type || "equipment")}" ${!LIB_TYPES.some((t) => t.type === c.type) ? "selected" : ""}>${esc(c.type || "equipment")}</option>
         </select>
+        <span class="${c.tagOrigin === "demo_reference" ? "ingestOriginDemo" : "muted"}">${esc(c.tagOrigin === "demo_reference" ? "demo ref" : "extracted")}</span>
         <span class="muted">${esc(String(Math.round((c.confidence || 0) * 100)))}%</span>
-      </div>`).join("") || `<p class="muted">No candidates yet — extract a document.</p>`;
+      </div>`
+        )
+        .join("") +
+      (hideDemo && ingestCandidates.some((c) => c.tagOrigin === "demo_reference")
+        ? `<p class="muted">Demo/reference tags hidden — uncheck “Hide demo/reference tags” to review training P&amp;ID fixtures.</p>`
+        : "");
     host.querySelectorAll(".ingestCand").forEach((row) => {
       row.onclick = (ev) => {
         if (ev.target.closest("input,select")) return;
@@ -2441,7 +3242,7 @@
     ingestCandidates = (ingestLast.candidates || []).map((c) => ({
       ...c,
       status: "proposed",
-      include: !isImage && (c.confidence || 0) >= 0.5
+      include: !isImage && c.tagOrigin !== "demo_reference" && (c.confidence || 0) >= 0.5
     }));
     ingestSelected = -1;
     renderIngestList();
@@ -2472,10 +3273,23 @@
     });
     renderIngestList();
   });
+  document.getElementById("ingestHideDemo")?.addEventListener("change", () => renderIngestList());
 
   document.getElementById("btnIngestPromote")?.addEventListener("click", async () => {
     const selected = ingestCandidates.filter((c) => c.status !== "deleted" && (c.include || c.status === "confirmed"));
-    if (!selected.length) return logEvent("Confirm at least one candidate", "alarm");
+    if (!selected.length) return logEvent("Confirm at least one equipment row before promote", "alarm");
+    const approve = !!document.getElementById("ingestApprove")?.checked;
+    const tags = selected.map((c) => c.tag).join(", ");
+    const ok = window.confirm(
+      `Add ${selected.length} equipment tag(s) to the engineering diagram?\n\n${tags}\n\n` +
+        (approve
+          ? "Marked approved: equipment will be ENGINEER_APPROVED."
+          : "Not marked approved: equipment stays UNVERIFIED (inference) until you approve in the inspector.")
+    );
+    if (!ok) {
+      logEvent("Promote cancelled — no silent approve", "ok");
+      return;
+    }
     const f = document.getElementById("ingestFile")?.files?.[0];
     try {
       const data = await api("/api/ingest/ocr/promote", {
@@ -2590,6 +3404,7 @@
     document.getElementById("btnXray").classList.toggle("active", xrayMode);
     if (xrayMode) {
       setConnectMode(false);
+      enterDiagnosticWorkspace();
       if (workspaceMode !== "diagnostic") {
         document.getElementById("modeHint").textContent = "X-Ray · select equipment for root cause";
       }
@@ -2599,6 +3414,7 @@
       );
       if (selected) {
         loadXray(selected).then(() => {
+          applyXrayPathHighlight();
           syncCanvas(lastCanvas);
           renderInspector();
         });
@@ -2606,8 +3422,11 @@
         xrayData = null;
         if (lastCanvas) syncCanvas(lastCanvas);
       }
+      if (!userViewLocked) fitViewSoon(2);
     } else {
       xrayData = null;
+      ilkHighlightIds = new Set();
+      ilkHighlightActive = false;
       if (workspaceMode === "engineering") {
         document.getElementById("modeHint").textContent = "Engineering · place, connect, configure";
       } else if (workspaceMode === "simulation") {
@@ -2921,7 +3740,10 @@
     });
     if (next === "diagnostic") {
       document.getElementById("viewTitle").textContent = "Diagnostic map";
+      enterDiagnosticWorkspace();
       setXrayMode(true);
+      refreshLogicStatus().catch(() => {});
+      if (!selected) renderInspectorEmptyLogic();
     } else {
       if (xrayMode) setXrayMode(false);
       if (next === "engineering") {
@@ -2952,19 +3774,29 @@
     await refreshStatus();
     await refreshCanvas();
     await loadPlatformLimits();
-    fitView();
-    logEvent("P6 Studio ready — incremental canvas sync (no full rebuild)", "ok");
-    logEvent("Platform limits loaded in sidebar — unfinished paths stay labeled", "ok");
+    await refreshIlkCorners();
+    fitViewSoon(4, { force: true });
+    logEvent("P6 Studio ready — Fit all shows the whole plant · red lock = interlock · expand Alarms for LIMIT items", "ok");
     if (params.get("demo") === "1") {
       await api("/api/runtime/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       logEvent("Sample plant: runtime started", "ok");
       await refreshStatus();
       await refreshCanvas();
+      fitViewSoon(3, { force: true });
     }
     if (params.get("wizard") === "1") openWizard(1);
   }
 
   boot().catch((e) => logEvent("Boot failed: " + e.message, "alarm"));
+
+  // Re-fit when the browser window changes size (skips when user has manually zoomed/panned)
+  let resizeFitTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeFitTimer);
+    resizeFitTimer = setTimeout(() => {
+      if (!userViewLocked) fitViewSoon(2);
+    }, 140);
+  });
 
   // Separate poll from paint: Runtime fetch ~400ms; visuals via rAF
   const pollTimer = setInterval(() => {
@@ -2972,6 +3804,9 @@
     refreshStatus();
     refreshCanvas().catch(() => {});
     refreshEvents();
+    ilkPollTick += 1;
+    // Keep top-left interlock locks live without hammering every frame
+    if (ilkPollTick % 5 === 0) refreshIlkCorners();
   }, 400);
 
   window.addEventListener("beforeunload", () => {

@@ -1,10 +1,40 @@
 # Build Status
 
-**Last updated:** 2026-10-09  
+**Last updated:** 2026-10-12  
 **Branch:** `p6/phase0-phase1-foundation`  
+
+## CEM 2.0 (Canonical Engineering Model) — in progress
+
+| Phase | Deliverable | Status |
+|------:|-------------|--------|
+| A | Architecture inventory + compatibility plan | ✓ [CEM2_INVENTORY.md](./CEM2_INVENTORY.md) |
+| B | Schema v2 + migrate (additive) | ✓ `SCHEMA_VERSION=2`, `cem2-schema-v2` migration |
+| C | `validateProject` + API + Studio Alarms surfacing | ✓ `/api/model/projects/:id/validation` |
+| D | Runtime/X-Ray adapters (no engine rewrite) | ✓ X-Ray prefers interlock + connection walks via `model_adapter` (`findRoleSignals`); live values from runtime; tag-regex fallback only; Phase 1 UI preserved |
+| E | Connect vendor mapping stub | ◐ `vendor_mapping.js` + GET export route (proposals only) |
+| F | Impact API (revision uses existing `modelVersion`) | ◐ `/api/model/projects/:id/impact` — equipment/signal deps + `verifyCatalogRefs` from model testCases (no invented FATs) |
+| G | Regression smoke | ✓ `smoke_test_cem2.js` in `regression_all.mjs` (11 jobs) |
+
+**Write-path validation:** promote / equipment / signal / connection / approve routes run `validateProject`, persist `lastValidation` (non-blocking). Studio Alarms still reads GET validation.
+
+**Not complete vs full §23 spec:** control sequence authoring UI, full Connect live path, SQL, multi-FAT catalog, certified safety claims.
+
 **Authority:** Master Development Directive (evolution) + MASTER PLATFORM SPEC (§1–§45)
 
 **Audit:** [PLATFORM_AUDIT.md](./PLATFORM_AUDIT.md)
+
+## Studio / X-Ray UX modernization track (8 phases)
+
+| Phase | Scope | Status |
+|------:|--------|--------|
+| 1 | X-Ray health dashboard, signal trace, narrative, Verify hints | ✓ |
+| 2 | P6 Verify surface (`verify.html`) — catalog from `/api/verify/tests`, assertion rows from `/api/verify/run`, shared `verify_ui.js` with Studio console | ✓ |
+| 3 | Ingest/OCR — `tagOrigin` demo vs extracted, hide demo/reference filter (Studio + ingest page), honest OCR limits unchanged | ✓ |
+| 4 | Connect — overview cards on `connect.html` + Studio Connect panel (Ignition unproven callout) | ✓ |
+| 5 | Simulation workflow — scenarios log to Events (not Verify); history/playback honesty in sidebar | ✓ |
+| 6 | Control-logic observability — `/api/runtime/logic` in Diag inspector (program IR excerpt, staged deploy status) | ✓ |
+| 7 | Verify expansion — catalog `limits[]` documents single FAT; no extra fake tests | ◐ (one real FAT only) |
+| 8 | Final UX polish — landing Connect nav, responsive prior work, regression + E2E markers | ✓ |
 
 ## Directive Phase status (MVP complete)
 
@@ -14,34 +44,26 @@
 | 2 Fluid interaction | ✓ Pan/zoom, snap, guides, multi-select, undo/redo, ortho links, waypoints, lock, layers, minimap, rotate |
 | 3 Live visual simulation | ✓ Tank levels, pump/valve state, flow intensity from FIT GPM |
 | 4 Unified workspace | ✓ Embedded tools + workflow strip; canvas state preserved |
-| 5 Advanced diagnostics | ✓ X-Ray + signal history playback |
-| 6 End-to-end experience | ✓ Upload→…→Verify strip, scenarios with before/after signal diffs |
+| 5 Advanced diagnostics | ✓ X-Ray Phase 1 + logic observability in Diag mode |
+| 6 End-to-end experience | ✓ Upload→…→Verify strip, scenarios with signal diffs (Events tab) |
 | Studio hub | ✓ In-Studio P&ID/doc ingest → review → place on canvas; delete/rework; Runtime auto-rebind |
-| Honesty | ✓ Known limits in `/api/readiness` + Studio sidebar + sticky Alarms tab LIMIT entries / ingest / Connect / timeline / exports |
+| Interlocks | ✓ Native Studio Interlocks panel |
+| Honesty | ✓ Known limits in `/api/readiness` + Studio sidebar |
 
 ## Spec §41 (parallel)
 
 | Phase | Status |
 |------:|--------|
 | 1–4 | ✓ / ◐ MVP delivered |
-| 5–7 | ◐ Expansion open (Ignition live prove-out, vendor exports) |
+| 5–7 | ◐ Expansion open (Ignition live prove-out, vendor exports, additional FATs) |
 
 ## Verification
 
 | Check | Result |
 |-------|--------|
-| `node scripts/regression_all.mjs` | **10/10 PASS** |
-| Studio E2E | **20/20 PASS** (ingest + delete rebind + knownLimits) |
+| `node scripts/regression_all.mjs` | **11/11 PASS** (incl. `cem2` + `studio_e2e`) — see TEST_RESULTS |
+| Studio E2E | **24/24** (verify catalog, logic API, verify/connect HTML markers, UX Phases 2–8) |
 | Demo | http://localhost:3000/studio.html?demo=1 |
-
-## Studio as selling point (live)
-
-| Capability | Status |
-|------------|--------|
-| Ingest P&ID / docs inside Studio | ✓ Nav + workflow strip → review panel → Promote to canvas |
-| Live model on canvas | ✓ Runtime canvas poll; ENGINEERING_INFERENCE until approved |
-| Test / delete / rework | ✓ Context menu + inspector; DELETE/PATCH model APIs |
-| Runtime auto-update on edits | ✓ `onModelChange` → `runtimeBridge.bindProject`; OCR promote also rebinds |
 
 ## Out of MVP (honest)
 
@@ -49,9 +71,10 @@
 - Allen-Bradley export remains placeholder  
 - History playback overlays recorded signals (does not rewind plant physics)  
 - Image OCR for scanned P&IDs unfinished (text/PDF extract works)  
+- Verify catalog still one FAT (`P101_ESTOP_SHUTDOWN`) — UI documents limit via `limits[]`  
 
-## Next (post-MVP)
+## Next (recommended)
 
-1. Prove Connect live tags with Ignition profile  
-2. Scenario package export/import  
-3. Commit source tree to feature branch / PR (KI-001)  
+1. Prove Connect live tags with Ignition profile (EULA + admin password; KI-019)  
+2. Add Tank Transfer FAT when real Runtime assertions exist (Phase 7 completion)  
+3. Open PR for `p6/phase0-phase1-foundation` once Ignition attempt documented (KI-001)  

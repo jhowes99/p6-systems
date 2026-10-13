@@ -61,6 +61,12 @@ const migrated = migrateProject({ name: "Legacy", schemaVersion: 0, equipment: [
 assert(migrated.project.schemaVersion === SCHEMA_VERSION, "migration to current");
 assert(migrated.migrationsApplied.includes("introduce-schema-v1"), "migration applied");
 
+const v1only = migrateProject({ name: "V1 shape", schemaVersion: 1, equipment: [], signals: [] });
+assert(v1only.project.schemaVersion === SCHEMA_VERSION, "v1 doc migrates to current schema");
+if (SCHEMA_VERSION >= 2) {
+  assert(v1only.migrationsApplied.includes("cem2-schema-v2"), "cem2 migration when on v2");
+}
+
 deleteProject(empty.id);
 const loaded = loadProject(project.id);
 assert(loaded?.name === "Water Transfer System", "reload water transfer");

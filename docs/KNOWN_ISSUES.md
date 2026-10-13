@@ -1,6 +1,6 @@
 # Known Issues
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-12
 
 ## Blockers / high
 
@@ -29,4 +29,9 @@
 | KI-009 | `HMI_AUTH_BYPASS` enabled in Docker demos | Dev-only; document in DOCKER.md |
 | KI-010 | Electron desktop packaging referenced but incomplete in zip | Out of scope for Docker-first MVP |
 | KI-011 | `.gitignore` ignores `*.zip` | Installer zip already tracked historically; prefer source tree |
-| KI-014 | Stale `p6-app` image can leave valve OpenedFeedback stuck | Rebuild after Runtime/Studio changes (`compose --profile core up --build -d`) |
+| KI-014 | Stale `p6-app` image can leave valve OpenedFeedback stuck / omit X-Ray Phase 1 fields | Rebuild after Runtime/Studio changes (`compose -f compose.yaml --profile core up --build -d p6-app`) |
+| KI-015 | Verify catalog has one FAT test | `GET /api/verify/tests` exposes `limits[]`; UI surfaces catalog only — no fake pass/fail |
+| KI-016 | Studio E2E sensitive to leftover faults (I1 stuck) | Smoke clears faults + runtime reset at start; still sim-only |
+| KI-017 | X-Ray safety / narrative is simulation-only | UI shows sim disclaimer; never claim certified physical safety assessment |
+| KI-018 | CEM 2.0 partial vs §23 | Schema v2, validation, X-Ray model-first adapters, write-path `lastValidation`, impact + Connect stubs shipped; control-sequence UI and Connect/Ignition live prove-out remain open |
+| KI-019 | Ignition live path not proven | Optional `ignition` profile; EULA (`ACCEPT_IGNITION_EULA`) + admin password required; do not claim live tags until OPC/Perspective flow is evidenced |

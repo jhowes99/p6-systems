@@ -7,47 +7,122 @@
   <link rel="stylesheet" href="site.css" />
   <link rel="stylesheet" href="app_shell.css" />
   <link rel="stylesheet" href="ui.css" />
+  <link rel="stylesheet" href="verify.css" />
 </head>
-<body data-app-active="verify">
+<body data-app-active="verify" class="verifyPage">
   <div id="appShell"></div>
   <main class="wrap">
     <div class="card">
       <h1 style="margin:0;">FAT &amp; verification</h1>
-      <p class="small">Automated FAT against the Water Transfer reference model. Evidence includes version references.</p>
+      <p class="small">Automated FAT against the Water Transfer reference model. Only tests listed in <code>/api/verify/tests</code> can run — no fabricated pass/fail.</p>
       <p class="small" style="color:#7a4b00;">Simulated E-stop verifies model behavior only — it does not certify a physical safety function.</p>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:1rem 0;">
-        <button id="btnRun" type="button">RUN P101_ESTOP_SHUTDOWN</button>
-        <button id="btnPdf" type="button">RUN + DOWNLOAD PDF</button>
-      </div>
-      <pre id="out" class="small" style="white-space:pre-wrap;background:#f6f8f7;padding:1rem;border:1px solid #ddd;min-height:8rem;"></pre>
+      <p class="small muted" id="catalogNote">Loading test catalog…</p>
+      <div id="verifyCatalog" class="verifyCatalog" data-verify-catalog></div>
+      <section class="verifyResults">
+        <h2 style="margin:0 0 0.5rem;font-size:1rem;">Results</h2>
+        <div id="verifyResultsHost"></div>
+        <p class="muted small" id="verifyEmpty">No runs yet — select a test above.</p>
+      </section>
     </div>
   </main>
   <script src="ui.js"></script>
   <script src="app_shell.js"></script>
+  <script src="verify_ui.js"></script>
   <script>
-    const out = document.getElementById("out");
-    document.getElementById("btnRun").onclick = async () => {
-      out.textContent = "Running…";
-      const res = await fetch("/api/verify/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const data = await res.json();
-      out.textContent = JSON.stringify(data, null, 2);
-    };
-    document.getElementById("btnPdf").onclick = async () => {
-      out.textContent = "Generating PDF…";
-      const res = await fetch("/api/verify/run.pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      if (!res.ok) {
-        out.textContent = await res.text();
-        return;
+    const host = document.getElementById("verifyResultsHost");
+    const empty = document.getElementById("verifyEmpty");
+    const catalogEl = document.getElementById("verifyCatalog");
+    const note = document.getElementById("catalogNote");
+
+    function prependResult(html) {
+      empty.hidden = true;
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      host.prepend(wrap.firstElementChild);
+    }
+
+    async function onRun(test, pdf) {
+      note.textContent = `Running ${test.name}…`;
+      try {
+        if (pdf) {
+          const res = await fetch("/api/verify/run.pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ testId: test.id })
+          });
+          if (!res.ok) {
+            prependResult(P6VerifyUI.renderVerifyRunRow({ testName: test.name, testId: test.id, pass: false, error: await res.text() }));
+            note.textContent = "PDF run failed.";
+            return;
+          }
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${test.id}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        const { pass, assertions, raw } = await P6VerifyUI.runTest(test.id);
+        prependResult(
+          P6VerifyUI.renderVerifyRunRow({
+            testName: test.name,
+            testId: test.id,
+            pass,
+            assertions,
+            raw: raw.result || raw
+          })
+        );
+        note.textContent = `${test.name} · ${pass ? "PASS" : "FAIL"} · catalog unchanged (${(await P6VerifyUI.fetchCatalog()).length} test(s))`;
+      } catch (e) {
+        prependResult(P6VerifyUI.renderVerifyRunRow({ testName: test.name, testId: test.id, pass: false, error: String(e.message || e) }));
+        note.textContent = "Run failed — see result row.";
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "P101_ESTOP_SHUTDOWN.pdf";
-      a.click();
-      URL.revokeObjectURL(url);
-      out.textContent = "PDF downloaded.";
-    };
+    }
+
+    (async () => {
+      try {
+        const limRes = await fetch("/api/verify/tests").then((r) => r.json());
+        const tests = limRes.tests || [];
+        const limits = limRes.limits || [];
+        if (!tests.length) {
+          catalogEl.innerHTML = `<p class="warn">No tests in catalog. Backend must expose real FAT definitions.</p>`;
+          note.textContent = "Empty catalog.";
+          return;
+        }
+        note.textContent = `${tests.length} test(s) from /api/verify/tests` + (limits[0] ? ` — ${limits[0]}` : "");
+        catalogEl.innerHTML = tests
+          .map(
+            (t) => `<article class="verifyTestCard" data-test-id="${t.id}">
+              <h3>${P6VerifyUI.esc(t.name || t.id)}</h3>
+              <p class="small muted">${P6VerifyUI.esc(t.description || "")}</p>
+              <p class="small">id: <code>${P6VerifyUI.esc(t.id)}</code> · v${P6VerifyUI.esc(String(t.version ?? "—"))}</p>
+              <div class="actions">
+                <button type="button" data-run="${P6VerifyUI.esc(t.id)}">Run test</button>
+                <button type="button" data-pdf="${P6VerifyUI.esc(t.id)}">Run + download PDF</button>
+              </div>
+            </article>`
+          )
+          .join("");
+        catalogEl.querySelectorAll("[data-run]").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-run");
+            const test = tests.find((x) => x.id === id);
+            if (test) onRun(test, false);
+          };
+        });
+        catalogEl.querySelectorAll("[data-pdf]").forEach((btn) => {
+          btn.onclick = () => {
+            const id = btn.getAttribute("data-pdf");
+            const test = tests.find((x) => x.id === id);
+            if (test) onRun(test, true);
+          };
+        });
+      } catch (e) {
+        catalogEl.innerHTML = `<p class="warn">${P6VerifyUI.esc(String(e.message || e))}</p>`;
+        note.textContent = "Could not load catalog.";
+      }
+    })();
   </script>
 </body>
 </html>

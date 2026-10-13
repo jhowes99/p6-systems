@@ -29,6 +29,9 @@ import { ensureWaterTransferProject } from "./seed_water_transfer.js";
 import { ensureTankTransferDemoProject } from "./seed_tank_transfer_demo.js";
 import { getTargetSchemaVersion } from "./migrate.js";
 import { promoteExtractions } from "./ingest_promote.js";
+import { validateProject, attachLastValidation, snapshotValidation } from "./validate.js";
+import { analyzeImpact } from "./impact.js";
+import { buildVendorMappingExport } from "../connect/vendor_mapping.js";
 
 export function createModelRouter({ audit = () => {}, onModelChange = null } = {}) {
   const router = Router();
@@ -43,6 +46,17 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
       audit("model.runtime.rebind_error", { error: String(e?.message || e), reason });
       return { ok: false, error: String(e?.message || e) };
     }
+  }
+
+  /**
+   * Persist lastValidation after a model write without an extra version bump.
+   * Non-blocking: incomplete engineering work is recorded, not rejected.
+   */
+  function persistWriteValidation(project) {
+    if (!project?.id) return { project, validation: null };
+    attachLastValidation(project);
+    const saved = saveProject(project, { bumpVersion: false });
+    return { project: saved, validation: saved.lastValidation || snapshotValidation(saved) };
   }
 
   router.get("/health", (_req, res) => {
@@ -119,13 +133,15 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
   router.post("/ingest/promote", (req, res) => {
     try {
       const result = promoteExtractions({ ...req.body, placeOnCanvas: req.body?.placeOnCanvas !== false });
+      const { project, validation } = persistWriteValidation(result.project);
       audit("model.ingest.promote", {
-        projectId: result.project.id,
+        projectId: project.id,
         equipment: result.created.equipment.length,
-        signals: result.created.signals.length
+        signals: result.created.signals.length,
+        validationOk: validation?.ok
       });
-      const runtimeBound = notifyModelChange(result.project, "ingest.promote");
-      res.status(201).json({ ok: true, ...result, runtimeBound });
+      const runtimeBound = notifyModelChange(project, "ingest.promote");
+      res.status(201).json({ ok: true, ...result, project, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -211,10 +227,11 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         p.equipment.push(eq);
         return p;
       });
-      const created = project.equipment[project.equipment.length - 1];
-      audit("model.equipment.create", { projectId: project.id, tag: created.tag });
-      const runtimeBound = notifyModelChange(project, "equipment.create");
-      res.status(201).json({ ok: true, equipment: created, project, runtimeBound });
+      const { project: saved, validation } = persistWriteValidation(project);
+      const created = saved.equipment[saved.equipment.length - 1];
+      audit("model.equipment.create", { projectId: saved.id, tag: created.tag });
+      const runtimeBound = notifyModelChange(saved, "equipment.create");
+      res.status(201).json({ ok: true, equipment: created, project: saved, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -290,9 +307,17 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         }
         return p;
       });
-      audit("model.equipment.delete", { projectId: project.id, tag: removed?.tag, id: removed?.id });
-      const runtimeBound = notifyModelChange(project, "equipment.delete");
-      res.json({ ok: true, removed, project, modelVersion: project.modelVersion, runtimeBound });
+      const { project: saved, validation } = persistWriteValidation(project);
+      audit("model.equipment.delete", { projectId: saved.id, tag: removed?.tag, id: removed?.id });
+      const runtimeBound = notifyModelChange(saved, "equipment.delete");
+      res.json({
+        ok: true,
+        removed,
+        project: saved,
+        modelVersion: saved.modelVersion,
+        validation,
+        runtimeBound
+      });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -330,9 +355,10 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         eq.updatedAt = new Date().toISOString();
         return p;
       });
-      const equipment = project.equipment.find((e) => e.id === req.params.equipmentId);
-      const runtimeBound = notifyModelChange(project, "equipment.patch");
-      res.json({ ok: true, equipment, project, runtimeBound });
+      const { project: saved, validation } = persistWriteValidation(project);
+      const equipment = saved.equipment.find((e) => e.id === req.params.equipmentId);
+      const runtimeBound = notifyModelChange(saved, "equipment.patch");
+      res.json({ ok: true, equipment, project: saved, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -369,9 +395,11 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         p.signals.push(sig);
         return p;
       });
-      const created = project.signals[project.signals.length - 1];
-      audit("model.signal.create", { projectId: project.id, tag: created.tag });
-      res.status(201).json({ ok: true, signal: created, project });
+      const { project: saved, validation } = persistWriteValidation(project);
+      const created = saved.signals[saved.signals.length - 1];
+      audit("model.signal.create", { projectId: saved.id, tag: created.tag });
+      const runtimeBound = notifyModelChange(saved, "signal.create");
+      res.status(201).json({ ok: true, signal: created, project: saved, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -395,8 +423,10 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         sig.updatedAt = sig.timestamp;
         return p;
       });
-      const signal = project.signals.find((s) => s.id === req.params.signalId);
-      res.json({ ok: true, signal, project });
+      const { project: saved, validation } = persistWriteValidation(project);
+      const signal = saved.signals.find((s) => s.id === req.params.signalId);
+      const runtimeBound = notifyModelChange(saved, "signal.patch");
+      res.json({ ok: true, signal, project: saved, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -429,8 +459,9 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         item.updatedAt = new Date().toISOString();
         return p;
       });
+      const { project: saved, validation } = persistWriteValidation(project);
       audit("model.approve", { projectId: req.params.id, entityType, entityId });
-      res.json({ ok: true, project });
+      res.json({ ok: true, project: saved, validation });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -472,14 +503,15 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         p.connections.push(conn);
         return p;
       });
-      const created = project.connections[project.connections.length - 1];
+      const { project: saved, validation } = persistWriteValidation(project);
+      const created = saved.connections[saved.connections.length - 1];
       audit("model.connection.create", {
-        projectId: project.id,
+        projectId: saved.id,
         id: created.id,
         type: created.connectionType
       });
-      const runtimeBound = notifyModelChange(project, "connection.create");
-      res.status(201).json({ ok: true, connection: created, project, runtimeBound });
+      const runtimeBound = notifyModelChange(saved, "connection.create");
+      res.status(201).json({ ok: true, connection: created, project: saved, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
@@ -518,15 +550,56 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         p.connections.splice(idx, 1);
         return p;
       });
-      audit("model.connection.delete", { projectId: project.id, id: req.params.connectionId });
-      const runtimeBound = notifyModelChange(project, "connection.delete");
-      res.json({ ok: true, removed, project, runtimeBound });
+      const { project: saved, validation } = persistWriteValidation(project);
+      audit("model.connection.delete", { projectId: saved.id, id: req.params.connectionId });
+      const runtimeBound = notifyModelChange(saved, "connection.delete");
+      res.json({ ok: true, removed, project: saved, validation, runtimeBound });
     } catch (e) {
       res.status(400).json({ ok: false, error: String(e?.message || e) });
     }
   });
 
   // Aggregate snapshot for Studio / Runtime consumers
+  router.get("/projects/:id/validation", (req, res) => {
+    try {
+      const project = loadProject(req.params.id);
+      if (!project) return res.status(404).json({ ok: false, error: "Project not found" });
+      const validation = validateProject(project);
+      res.json({
+        ok: true,
+        validation,
+        lastValidation: project.lastValidation || null,
+        schemaVersion: project.schemaVersion,
+        modelVersion: project.modelVersion
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: String(e?.message || e) });
+    }
+  });
+
+  router.get("/projects/:id/impact", (req, res) => {
+    try {
+      const { entityType, entityId, tag } = req.query || {};
+      const impact = analyzeImpact(req.params.id, {
+        entityType: entityType ? String(entityType) : null,
+        entityId: entityId ? String(entityId) : null,
+        tag: tag ? String(tag) : null
+      });
+      res.json(impact);
+    } catch (e) {
+      res.status(400).json({ ok: false, error: String(e?.message || e) });
+    }
+  });
+
+  router.get("/projects/:id/connect/vendor-mappings", (req, res) => {
+    try {
+      const payload = buildVendorMappingExport(req.params.id);
+      res.json(payload);
+    } catch (e) {
+      res.status(404).json({ ok: false, error: String(e?.message || e) });
+    }
+  });
+
   router.get("/projects/:id/summary", (req, res) => {
     const project = loadProject(req.params.id);
     if (!project) return res.status(404).json({ ok: false, error: "Project not found" });

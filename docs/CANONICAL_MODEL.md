@@ -12,7 +12,7 @@ server/data/canonical/
 ```
 
 - Format: JSON files (ADR-002). SQL deferred until multi-user concurrency requires it.
-- Schema version: `SCHEMA_VERSION` in `server/model/schema.js` (currently **1**).
+- Schema version: `SCHEMA_VERSION` in `server/model/schema.js` (currently **2** — CEM 2.0 additive fields).
 - Migrations: `server/model/migrate.js` — applied on load; never drop fields without a migration.
 
 ## Core entities
@@ -46,6 +46,9 @@ Uncertain extractions data must not be silently promoted — use `POST .../appro
 | PATCH | `/projects/:id/signals/:signalId` | Update signal |
 | POST | `/projects/:id/approve` | Promote entity to ENGINEER_APPROVED |
 | GET | `/projects/:id/summary` | Counts + tags |
+| GET | `/projects/:id/validation` | Engineering validation (errors/warnings/info) |
+| GET | `/projects/:id/impact` | Impact analysis (`entityType`, `entityId`, or `tag`) |
+| GET | `/projects/:id/connect/vendor-mappings` | Connect vendor mapping export stub (proposals only) |
 | POST | `/projects/:id/import-legacy-bundle` | Bridge from LAST_PROJECT shape |
 
 ## Water Transfer seed

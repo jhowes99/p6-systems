@@ -66,6 +66,7 @@ import {
 } from "./connect/ignition_udt.js";
 import { validateSignalCommand } from "./plc/command_validate.js";
 import { analyzeEquipmentXRay } from "./model/xray.js";
+import { buildInterlocksView, buildInterlockDetail } from "./model/interlocks_view.js";
 import { LogicDeployer } from "./plc/logic_deploy.js";
 import { listEquipmentTypes, getEquipmentType } from "./plc/equipment/library.js";
 import { traceFromTestFailure, traceFromSignal } from "./model/traceability.js";
@@ -374,6 +375,33 @@ app.get("/api/runtime/xray", (req, res) => {
   }
 });
 
+// Studio Interlocks — whole-picture view (conditions + inhibits + live state)
+app.get("/api/runtime/interlocks", (req, res) => {
+  try {
+    const project = getActiveProject() || runtimeBridge.project;
+    const result = buildInterlocksView({
+      projectId: project?.id,
+      signals: runtimeBridge.listSignals(),
+      equipmentId: req.query.equipmentId || null
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+app.get("/api/runtime/interlocks/:id", (req, res) => {
+  try {
+    const project = getActiveProject() || runtimeBridge.project;
+    const result = buildInterlockDetail(req.params.id, {
+      projectId: project?.id,
+      signals: runtimeBridge.listSignals()
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 app.post("/api/runtime/command", (req, res) => {
   try {
     const tag = req.body?.tag;
@@ -541,7 +569,10 @@ app.get("/api/verify/tests", (_req, res) => {
       name: P101_ESTOP_SHUTDOWN.name,
       version: P101_ESTOP_SHUTDOWN.version,
       description: P101_ESTOP_SHUTDOWN.description
-    }]
+    }],
+    limits: [
+      "Catalog contains one Water Transfer reference FAT (P101_ESTOP_SHUTDOWN). Tank Transfer Studio demo uses Runtime bridge — additional FATs require real PLC assertions, not UI-only pass/fail."
+    ]
   });
 });
 

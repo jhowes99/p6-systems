@@ -10,9 +10,77 @@ import {
   SignalDirection,
   createEquipment,
   createSignal,
-  createDocument
+  createDocument,
+  createInterlock
 } from "./schema.js";
 import { loadProject, saveProject, getActiveProject, createProject } from "./store.js";
+import { attachLastValidation } from "./validate.js";
+
+/** Draft interlocks from ingested safety/level tags so Studio can show the inside after OCR promote. */
+function inferDraftInterlocks(project, createdEquipment, dataClass) {
+  const created = [];
+  const pumpsMotors = project.equipment.filter((e) => /pump|motor/i.test(e.type));
+  const inhibitIds = pumpsMotors.map((e) => e.id);
+  if (!inhibitIds.length) return created;
+
+  for (const eq of createdEquipment) {
+    if (/emergency_stop/i.test(eq.type) || /ESD|ESTOP/i.test(eq.tag)) {
+      let sig = project.signals.find((s) => s.tag === `${eq.tag}.Healthy`);
+      if (!sig) {
+        sig = createSignal({
+          projectId: project.id,
+          tag: `${eq.tag}.Healthy`,
+          equipmentId: eq.id,
+          direction: SignalDirection.INPUT,
+          dataType: DataType.BOOL,
+          dataClass,
+          source: "p6.ingest.interlock"
+        });
+        project.signals.push(sig);
+      }
+      const name = `${eq.tag.replace(/[^A-Z0-9]/gi, "")}_SHUTDOWN`;
+      if (project.interlocks.some((i) => i.name === name)) continue;
+      const ilk = createInterlock({
+        projectId: project.id,
+        name,
+        conditionSignalIds: [sig.id],
+        actionDescription: `Inferred from ingest: when ${eq.tag}.Healthy is false, inhibit pumps/motors (ENGINEERING_INFERENCE — review required). Simulated only.`,
+        inhibitsEquipmentIds: inhibitIds,
+        dataClass
+      });
+      project.interlocks.push(ilk);
+      created.push(ilk);
+    }
+    if (/level_transmitter/i.test(eq.type) || /^LSH|^LT/i.test(eq.tag)) {
+      let sig = project.signals.find((s) => s.tag === `${eq.tag}.High`);
+      if (!sig) {
+        sig = createSignal({
+          projectId: project.id,
+          tag: `${eq.tag}.High`,
+          equipmentId: eq.id,
+          direction: SignalDirection.INPUT,
+          dataType: DataType.BOOL,
+          dataClass,
+          source: "p6.ingest.interlock"
+        });
+        project.signals.push(sig);
+      }
+      const name = `${eq.tag.replace(/[^A-Z0-9]/gi, "")}_HIGH_SHUTDOWN`;
+      if (project.interlocks.some((i) => i.name === name)) continue;
+      const ilk = createInterlock({
+        projectId: project.id,
+        name,
+        conditionSignalIds: [sig.id],
+        actionDescription: `Inferred from ingest: high level on ${eq.tag} inhibits transfer equipment (ENGINEERING_INFERENCE — review required).`,
+        inhibitsEquipmentIds: inhibitIds,
+        dataClass
+      });
+      project.interlocks.push(ilk);
+      created.push(ilk);
+    }
+  }
+  return created;
+}
 
 export function inferEquipmentType(tag, hinted) {
   const hint = String(hinted || "").toLowerCase();
@@ -87,7 +155,7 @@ export function promoteExtractions(body = {}) {
   });
   project.documents.push(doc);
 
-  const created = { equipment: [], signals: [] };
+  const created = { equipment: [], signals: [], interlocks: [] };
   const equipment = body.equipment || [];
   for (const e of equipment) {
     if (!e?.tag) continue;
@@ -132,11 +200,18 @@ export function promoteExtractions(body = {}) {
     layoutNewEquipment(project, created.equipment);
   }
 
+  const dc = body.approveAll ? DataClass.ENGINEER_APPROVED : DataClass.ENGINEERING_INFERENCE;
+  created.interlocks = inferDraftInterlocks(project, created.equipment, dc);
+
+  attachLastValidation(project);
   project = saveProject(project, { bumpVersion: true });
   return {
     project,
     document: doc,
     created,
-    note: "Candidates remain ENGINEERING_INFERENCE until approved unless approveAll was set"
+    validation: project.lastValidation || null,
+    note:
+      "Candidates remain ENGINEERING_INFERENCE until approved unless approveAll was set. " +
+      "Draft interlocks from ESD/level tags are inference-only — open Studio Interlocks to review the inside."
   };
 }

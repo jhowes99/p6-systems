@@ -46,6 +46,12 @@ try {
   ok("active project " + active.project.name);
 
   await j("/api/runtime/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  await j("/api/runtime/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  try {
+    await j("/api/fault/I1", { method: "DELETE" });
+  } catch (_) {
+    /* no fault */
+  }
   ok("runtime start");
 
   const canvas = await j("/api/runtime/canvas");
@@ -81,6 +87,11 @@ try {
   assert(t2.properties?.capacityM3 > 0, "capacity recalculated");
   ok("tank capacity configure");
 
+  try {
+    await j("/api/fault/I1", { method: "DELETE" });
+  } catch (_) {
+    /* no fault */
+  }
   await j("/api/runtime/command", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -94,9 +105,19 @@ try {
   await j("/api/runtime/command", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag: "System.Reset", value: true })
+  });
+  await j("/api/runtime/command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tag: "VALVE-101.OpenCommand", value: true })
   });
-  await new Promise((r) => setTimeout(r, 400));
+  for (let i = 0; i < 8; i += 1) {
+    const sig = await j("/api/runtime/signals");
+    const open = (sig.signals || []).find((s) => s.tag === "VALVE-101.OpenedFeedback");
+    if (open?.currentValue === true) break;
+    await new Promise((r) => setTimeout(r, 120));
+  }
   ok("VALVE-101 open");
 
   await j("/api/runtime/command", {
@@ -141,7 +162,44 @@ try {
   assert(xray.inhibited === true, "xray inhibited under esd");
   assert(xray.primaryBlocker, "xray primary blocker");
   assert((xray.highlightEquipmentIds || []).length >= 2, "xray highlights path");
-  ok("xray root-cause");
+  assert(xray.health?.state === "INHIBITED", "xray health inhibited");
+  assert(xray.health?.primaryBlocker, "xray health.primaryBlocker");
+  assert(Array.isArray(xray.path) && xray.path.length >= 2, "xray signal path");
+  assert(xray.path.some((p) => p.role === "INPUT" || p.step === "INPUT"), "xray path has INPUT");
+  assert(Array.isArray(xray.narrative) && xray.narrative.length >= 1, "xray narrative");
+  assert(xray.groups && Array.isArray(xray.groups.blockers), "xray groups.blockers");
+  assert((xray.groups.blockers || []).some((b) => b.id === "esd" || /esd|estop/i.test(b.label || "")), "xray blockers include ESD");
+  assert(Array.isArray(xray.verifyHints), "xray verifyHints");
+  ok("xray root-cause + phase1 payload");
+
+  // Stuck-valve fault → blocking valve condition on demo pump (fault inject/clear preserved)
+  await j("/api/runtime/command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag: "ESD-101.Healthy", value: true })
+  });
+  await j("/api/runtime/command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tag: "System.Reset", value: true })
+  });
+  await j("/api/fault", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ var: "I1", mode: "stuck", value: false })
+  });
+  let xrayValve = null;
+  for (let i = 0; i < 6; i += 1) {
+    xrayValve = await j(`/api/runtime/xray?equipmentId=${encodeURIComponent(pump.id)}`);
+    if (xrayValve.inhibited && xrayValve.primaryBlocker?.id === "valve") break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert(xrayValve.inhibited === true, "xray inhibited under stuck valve");
+  assert(xrayValve.primaryBlocker?.id === "valve", `expected valve blocker, got ${xrayValve.primaryBlocker?.id}`);
+  const valveNode = canvas.nodes.find((n) => n.tag === "VALVE-101");
+  assert(valveNode && (xrayValve.highlightEquipmentIds || []).includes(valveNode.id), "xray highlights valve on stuck fault");
+  await j("/api/fault/I1", { method: "DELETE" });
+  ok("xray stuck-valve fault inject/clear");
 
   // Connection create + delete
   const fitOrValve = canvas.nodes.find((n) => n.tag === "VALVE-101");
@@ -160,13 +218,20 @@ try {
   await j(`/api/model/projects/${projectId}/connections/${created.connection.id}`, { method: "DELETE" });
   ok("connection create/delete");
 
+  const catalog = await j("/api/verify/tests");
+  assert((catalog.tests || []).length >= 1, "verify catalog");
+  assert(Array.isArray(catalog.limits) && catalog.limits.length >= 1, "verify catalog limits documented");
   const fat = await j("/api/verify/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}"
   });
   assert(fat.pass === true || fat.result?.pass === true, "FAT pass");
-  ok("FAT P101_ESTOP_SHUTDOWN");
+  ok("FAT P101_ESTOP_SHUTDOWN + catalog limits");
+
+  const logic = await j("/api/runtime/logic");
+  assert(logic.ok && logic.program != null, "runtime logic observability");
+  ok("runtime logic API");
 
   // Allow history frames to accumulate
   await new Promise((r) => setTimeout(r, 500));
@@ -248,6 +313,35 @@ try {
   assert(!canvas3.nodes.some((n) => n.tag === "TANK-201"), "deleted equipment gone from canvas");
   ok("delete equipment + rebind");
 
+  // Interlocks — whole-picture inside view (demo has LT high + ESD)
+  const ilks = await j("/api/runtime/interlocks");
+  assert(ilks.ok && (ilks.interlocks || []).length >= 2, "interlocks present");
+  const esdIlk = ilks.interlocks.find((i) => /ESD/i.test(i.name));
+  assert(esdIlk, "ESD interlock");
+  assert((esdIlk.conditions || []).length >= 1, "ESD has conditions");
+  assert((esdIlk.inhibits || []).length >= 1, "ESD inhibits equipment");
+  assert((esdIlk.chain || []).length >= 2, "ESD inside chain");
+  const ilkDetail = await j(`/api/runtime/interlocks/${esdIlk.id}`);
+  assert(ilkDetail.interlock?.id === esdIlk.id, "interlock detail");
+  // Promote ESD tag → draft interlock inference (unique tag avoids stale project pollution)
+  const esdTag = `ESD-E2E-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+  const esdPromo = await j("/api/ingest/ocr/promote", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-P6-Role": "engineer" },
+    body: JSON.stringify({
+      projectId,
+      documentName: "e2e-esd.txt",
+      format: "text/plain",
+      placeOnCanvas: true,
+      equipment: [{ tag: esdTag, type: "emergency_stop_input" }]
+    })
+  });
+  assert(
+    (esdPromo.created?.interlocks || []).length >= 1,
+    `ingest inferred ESD interlock for ${esdTag}`
+  );
+  ok("interlocks inside view + ingest inference");
+
   // Platform limits surfaced via readiness (Studio sidebar consumes this)
   const ready = await j("/api/readiness");
   assert(Array.isArray(ready.knownLimits) && ready.knownLimits.length >= 4, "knownLimits present");
@@ -263,6 +357,12 @@ try {
     assert(r.status === 200, p);
   }
   ok("studio pages 200");
+
+  const verifyHtml = await fetch(`${base}/verify.html`).then((r) => r.text());
+  assert(verifyHtml.includes("data-verify-catalog"), "verify.html catalog UI");
+  const connectHtml = await fetch(`${base}/connect.html`).then((r) => r.text());
+  assert(connectHtml.includes("data-connect-cards"), "connect.html overview cards");
+  ok("verify + connect UX markers");
 
   console.log(`\nStudio E2E: ${steps.length}/${steps.length} passed`);
 } catch (e) {

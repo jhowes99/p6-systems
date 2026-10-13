@@ -3,7 +3,15 @@
  * Spec §5. File-backed SoR (ADR-002); Ignition is optional consumer only.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+
+/** Cached engineering validation rollup (computed; optional on entities) */
+export const ValidationStatus = Object.freeze({
+  UNKNOWN: "UNKNOWN",
+  VALID: "VALID",
+  WARNING: "WARNING",
+  ERROR: "ERROR"
+});
 
 /** Provenance / approval classification (Spec §4) */
 export const DataClass = Object.freeze({
@@ -68,6 +76,12 @@ export function createEmptyProject({ name, description = "", id: givenId } = {})
     testResults: [],
     vendorAdapters: [],
     integrationConnections: [],
+    /** CEM 2.0 — optional control narrative / sequence skeletons */
+    controlSequences: [],
+    /** CEM 2.0 — vendor-neutral mapping intent (Connect export proposals) */
+    vendorMappings: [],
+    /** Last validateProject snapshot (informational) */
+    lastValidation: null,
     // Bridge to existing ladder IR / C&E until Runtime Phase 3–4 fully adopts the model
     legacy: {
       ladderIR: null,
@@ -126,6 +140,8 @@ export function createEquipment({
     operatingState: initialState,
     properties: {},
     sourceDocumentIds: [...sourceDocumentIds],
+    sourceDocumentRefs: [...sourceDocumentIds],
+    validationStatus: ValidationStatus.UNKNOWN,
     createdAt: ts,
     updatedAt: ts
   };
@@ -192,6 +208,59 @@ export function createSignal({
     instrumentId,
     address,
     dataClass,
+    sourceDocumentRefs: [],
+    validationStatus: ValidationStatus.UNKNOWN,
+    createdAt: ts,
+    updatedAt: ts
+  };
+}
+
+export function createControlSequence({
+  projectId,
+  name,
+  description = "",
+  stepIds = [],
+  equipmentIds = [],
+  dataClass = DataClass.ENGINEERING_INFERENCE
+}) {
+  const ts = nowIso();
+  return {
+    id: id("seq"),
+    projectId,
+    name,
+    description,
+    stepIds: [...stepIds],
+    equipmentIds: [...equipmentIds],
+    dataClass,
+    validationStatus: ValidationStatus.UNKNOWN,
+    createdAt: ts,
+    updatedAt: ts
+  };
+}
+
+export function createVendorMapping({
+  projectId,
+  vendor = "ignition",
+  p6Signal = null,
+  p6Tag = null,
+  signalId = null,
+  equipmentId = null,
+  vendorPath = "",
+  direction = "P6_TO_VENDOR",
+  status = "proposed"
+}) {
+  const ts = nowIso();
+  return {
+    id: id("vmap"),
+    projectId,
+    vendor,
+    p6Signal,
+    p6Tag,
+    signalId,
+    equipmentId,
+    vendorPath,
+    direction,
+    status,
     createdAt: ts,
     updatedAt: ts
   };
@@ -275,6 +344,7 @@ export function createInterlock({
     actionDescription,
     inhibitsEquipmentIds: [...inhibitsEquipmentIds],
     dataClass,
+    validationStatus: ValidationStatus.UNKNOWN,
     createdAt: nowIso()
   };
 }
@@ -472,6 +542,9 @@ export function normalizeProject(raw) {
     testResults: Array.isArray(raw?.testResults) ? raw.testResults : [],
     vendorAdapters: Array.isArray(raw?.vendorAdapters) ? raw.vendorAdapters : [],
     integrationConnections: Array.isArray(raw?.integrationConnections) ? raw.integrationConnections : [],
+    controlSequences: Array.isArray(raw?.controlSequences) ? raw.controlSequences : [],
+    vendorMappings: Array.isArray(raw?.vendorMappings) ? raw.vendorMappings : [],
+    lastValidation: raw?.lastValidation ?? null,
     legacy: {
       ladderIR: raw?.legacy?.ladderIR ?? null,
       ioMap: raw?.legacy?.ioMap && typeof raw.legacy.ioMap === "object" ? raw.legacy.ioMap : {},

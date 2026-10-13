@@ -61,6 +61,22 @@ export async function extractText(buffer, mimeType = "") {
   throw new Error(`Unsupported mime for OCR ingest: ${mimeType}`);
 }
 
+/** Tags that appear in shipped reference demos — flag so engineers can filter training P&IDs. */
+export const DEMO_REFERENCE_TAGS = new Set([
+  "TANK-101", "TANK-102", "PUMP-101", "VALVE-101", "LT-101", "ESD-101", "FIT-101",
+  "P-101", "M-101", "XV-101", "LSH-101", "ESTOP-101"
+]);
+
+/**
+ * Classify whether a mined tag likely matches a bundled demo fixture vs net-new extraction.
+ * @returns {"demo_reference"|"extracted"}
+ */
+export function classifyTagOrigin(tag) {
+  const t = String(tag || "").toUpperCase();
+  if (DEMO_REFERENCE_TAGS.has(t)) return "demo_reference";
+  return "extracted";
+}
+
 /** Naive tag mining with low/medium confidence scores */
 export function mineCandidates(text) {
   const candidates = [];
@@ -83,12 +99,14 @@ export function mineCandidates(text) {
     else if (/^XV|^HV|^FV|^VALVE|^V-?\d/i.test(tag)) type = "valve";
     else if (/^PUMP|^P-?\d|^P\d/i.test(tag)) type = "pump";
     else if (/^MOTOR|^M-?\d|^M\d/i.test(tag)) type = "motor";
+    const tagOrigin = classifyTagOrigin(tag);
     candidates.push({
       tag,
       type,
-      confidence: 0.55,
+      confidence: tagOrigin === "demo_reference" ? 0.72 : 0.55,
       dataClass: "ENGINEERING_INFERENCE",
-      source: "ocr_mine"
+      source: "ocr_mine",
+      tagOrigin
     });
   }
   return candidates;

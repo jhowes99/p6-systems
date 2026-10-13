@@ -40,6 +40,22 @@ const blocked = analyzeEquipmentXRay({
 assert(blocked.inhibited === true, "should be inhibited when valve closed");
 assert(blocked.primaryBlocker?.id === "valve", `expected valve blocker, got ${blocked.primaryBlocker?.id}`);
 assert(blocked.highlightEquipmentIds.includes(valve.id), "highlight includes valve");
+assert(blocked.health?.state === "INHIBITED", "health.state inhibited");
+assert(blocked.health?.primaryBlocker?.id === "valve", "health.primaryBlocker valve");
+assert(Array.isArray(blocked.path) && blocked.path.length >= 2, "path steps present");
+assert(blocked.path.some((p) => p.role === "PERMISSIVE"), "path includes PERMISSIVE");
+assert(Array.isArray(blocked.narrative) && blocked.narrative.length >= 1, "narrative paragraphs");
+assert(blocked.groups?.blockers?.some((b) => b.id === "valve"), "groups.blockers has valve");
+assert(Array.isArray(blocked.verifyHints), "verifyHints present");
+assert(blocked.relationshipSource === "canonical_model_preferred", "canonical relationship preference");
+assert(
+  (blocked.conditions || []).some((c) => c.id === "esd" && c.derivedFrom === "model"),
+  "esd condition from model interlock walk"
+);
+assert(
+  (blocked.conditions || []).some((c) => c.id === "valve" && (c.derivedFrom === "model" || c.derivedFrom === "heuristic")),
+  "valve permissive present without inventing signals"
+);
 
 const signalsOpen = signalsClosed.map((s) =>
   s.tag === "VALVE-101.OpenedFeedback" ? { ...s, currentValue: true } : s
@@ -52,6 +68,8 @@ const ready = analyzeEquipmentXRay({
 });
 assert(ready.inhibited === false, "ready when valve open + esd healthy");
 assert(ready.canStart === true, "canStart");
+assert(ready.health?.state === "READY" || ready.health?.canStart === true, "health ready");
+assert(ready.groups?.blockers?.length === 0, "no blockers when ready");
 
 // Extra connection create/delete via store
 const tank = project.equipment.find((e) => e.tag === "TANK-101");

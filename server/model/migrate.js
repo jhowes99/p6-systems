@@ -23,6 +23,35 @@ const MIGRATIONS = [
       }
       return n;
     }
+  },
+  {
+    from: 1,
+    to: 2,
+    name: "cem2-schema-v2",
+    apply(project) {
+      const n = normalizeProject(project);
+      n.schemaVersion = 2;
+      if (!Array.isArray(n.controlSequences)) n.controlSequences = [];
+      if (!Array.isArray(n.vendorMappings)) n.vendorMappings = [];
+      if (n.lastValidation === undefined) n.lastValidation = null;
+
+      const touchEntity = (item) => {
+        if (!item || typeof item !== "object") return item;
+        if (!item.updatedAt) item.updatedAt = new Date().toISOString();
+        if (item.validationStatus == null) item.validationStatus = "UNKNOWN";
+        if (Array.isArray(item.sourceDocumentIds) && !item.sourceDocumentRefs) {
+          item.sourceDocumentRefs = [...item.sourceDocumentIds];
+        }
+        return item;
+      };
+
+      n.equipment = n.equipment.map(touchEntity);
+      n.instruments = n.instruments.map(touchEntity);
+      n.signals = n.signals.map(touchEntity);
+      n.interlocks = n.interlocks.map(touchEntity);
+      n.testCases = n.testCases.map(touchEntity);
+      return n;
+    }
   }
 ];
 

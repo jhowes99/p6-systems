@@ -1,0 +1,49 @@
+.verifyPage .verifyCatalog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.verifyPage .verifyTestCard {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: #fff;
+}
+.verifyPage .verifyTestCard h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+.verifyPage .verifyTestCard .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+.verifyPage .verifyResults {
+  margin-top: 1.25rem;
+}
+.verifyRow {
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.85rem;
+}
+.verifyHead { margin-bottom: 0.25rem; }
+.verifyAssert {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  font-size: 0.82rem;
+}
+.verifyAssert .ok { color: #166534; }
+.verifyAssert .alarm { color: #b91c1c; }
+.verifyRow.ok { border-left: 3px solid #22c55e; padding-left: 0.5rem; }
+.verifyRow.alarm { border-left: 3px solid #ef4444; padding-left: 0.5rem; }
+.advDetails { margin-top: 0.35rem; font-size: 0.78rem; }
+.advDetails pre {
+  background: #f6f8f7;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  overflow: auto;
+  max-height: 12rem;
+}

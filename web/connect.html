@@ -7,6 +7,14 @@
   <link rel="stylesheet" href="site.css" />
   <link rel="stylesheet" href="app_shell.css" />
   <link rel="stylesheet" href="ui.css" />
+  <style>
+    .connectCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .connectCard { border: 1px solid #d1d5db; border-radius: 10px; padding: 0.85rem; background: #fff; }
+    .connectCard h4 { margin: 0 0 0.35rem; }
+    .connectStatus { font-weight: 600; margin: 0.25rem 0; }
+    .connectHonest { font-size: 0.82rem; color: #78350f; border-left: 3px solid #f59e0b; padding-left: 0.5rem; margin-top: 0.5rem; }
+    .connectAdvanced pre { background: #f6f8f7; padding: 0.75rem; border: 1px solid #ddd; white-space: pre-wrap; max-height: 14rem; overflow: auto; }
+  </style>
 </head>
 <body data-app-active="connect">
   <div id="appShell"></div>
@@ -15,20 +23,14 @@
       <h1 style="margin:0;">P6 Connect</h1>
       <p class="small">Industrial connectivity. Ignition is <b>optional</b> — core Runtime does not require it.</p>
       <p class="small" style="margin-top:0.5rem;padding:0.65rem 0.75rem;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;color:#78350f;">
-        <b>LIMIT:</b> Ignition / OPC live tag path is unproven in this build. Status below shows connectivity configuration only —
+        <b>LIMIT:</b> Ignition / OPC live tag path is unproven in this build. Cards below show connectivity configuration only —
         do not claim live plant sync until proven with the Compose <code>ignition</code> profile. Live write-back stays gated off.
       </p>
-      <div id="status" class="small" style="margin-top:1rem;"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;">
-        <div>
-          <h3 style="margin:0 0 0.35rem;">OPC UA</h3>
-          <pre id="opcua" class="small" style="background:#f6f8f7;padding:0.75rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
-        </div>
-        <div>
-          <h3 style="margin:0 0 0.35rem;">MQTT (JSON, not Sparkplug)</h3>
-          <pre id="mqtt" class="small" style="background:#f6f8f7;padding:0.75rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
-        </div>
-      </div>
+      <div id="connectCards" class="connectCards" data-connect-cards></div>
+      <details class="connectAdvanced">
+        <summary>Advanced (raw JSON)</summary>
+        <pre id="connectRaw" class="small"></pre>
+      </details>
       <ul class="small">
         <li><b>MODE 1 — SIMULATION</b> (default): P6 executes logic; Ignition may observe via OPC UA.</li>
         <li><b>MODE 2 — EXTERNAL TEST</b>: reserved / gated.</li>
@@ -44,17 +46,44 @@
   <script src="ui.js"></script>
   <script src="app_shell.js"></script>
   <script>
+    function card(title, status, detail, honest) {
+      return `<article class="connectCard">
+        <h4>${title}</h4>
+        <p class="connectStatus">${status}</p>
+        <p class="muted small">${detail}</p>
+        ${honest ? `<p class="connectHonest">${honest}</p>` : ""}
+      </article>`;
+    }
+
     Promise.all([
-      fetch("/api/connect/status").then(r => r.json()),
-      fetch("/api/connect/opcua").then(r => r.json()),
-      fetch("/api/connect/mqtt").then(r => r.json())
-    ]).then(([status, opcua, mqtt]) => {
-      document.getElementById("status").textContent = JSON.stringify(status, null, 2);
-      document.getElementById("opcua").textContent = JSON.stringify(opcua, null, 2);
-      document.getElementById("mqtt").textContent = JSON.stringify(mqtt, null, 2);
-    }).catch(e => {
-      document.getElementById("status").textContent = String(e);
-    });
+      fetch("/api/connect/status").then((r) => r.json()),
+      fetch("/api/connect/opcua").then((r) => r.json()),
+      fetch("/api/connect/mqtt").then((r) => r.json()),
+      fetch("/api/connect/engineering/status").then((r) => r.json())
+    ])
+      .then(([status, opcua, mqtt, eng]) => {
+        const opcSt = opcua.connected ? "Connected" : opcua.enabled === false ? "Disabled" : "Not connected";
+        const mqttSt = mqtt.connected ? "Connected" : mqtt.enabled === false ? "Disabled" : "Not connected";
+        const engSt = eng.approved ? "Approved for export" : eng.pending ? "Pending review" : "Engineering gate";
+        document.getElementById("connectCards").innerHTML =
+          card(
+            "OPC UA / Ignition",
+            opcSt,
+            opcua.endpoint || opcua.message || "Optional profile — not required for Studio + Runtime.",
+            "Live Ignition tags are not proven in this build unless you validate with the ignition compose profile."
+          ) +
+          card("MQTT", mqttSt, mqtt.broker || mqtt.topic || "Observation / bridge when configured.", "") +
+          card(
+            "Engineering export",
+            engSt,
+            `Project ${eng.projectId || "—"} · model v${eng.modelVersion ?? "—"}`,
+            eng.approved ? "" : "Exports stay gated until engineering approval — P6 model remains authoritative."
+          );
+        document.getElementById("connectRaw").textContent = JSON.stringify({ status, opcua, mqtt, engineering: eng }, null, 2);
+      })
+      .catch((e) => {
+        document.getElementById("connectCards").innerHTML = `<p class="warn">${String(e)}</p>`;
+      });
   </script>
 </body>
 </html>

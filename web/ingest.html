@@ -124,6 +124,7 @@
       <button id="selectAll" type="button">Select all</button>
       <button id="promote" type="button" disabled>Promote confirmed</button>
       <label class="small"><input type="checkbox" id="approve" /> Mark ENGINEER_APPROVED on promote</label>
+      <label class="small"><input type="checkbox" id="hideDemo" checked /> Hide demo/reference tags</label>
       <a class="small" href="/studio.html?wizard=1">Open Studio wizard</a>
     </div>
     <div class="statusRow">
@@ -206,9 +207,11 @@
     }
 
     function renderList() {
-      list.innerHTML = `<div class="cand cand-h"><span></span><span>Tag</span><span>Type</span><span>Conf</span><span>Incl</span></div>`;
+      const hideDemo = !!document.getElementById("hideDemo")?.checked;
+      list.innerHTML = `<div class="cand cand-h"><span></span><span>Tag</span><span>Type</span><span>Origin</span><span>Conf</span><span>Incl</span></div>`;
       candidates.forEach((c, i) => {
         if (c.status === "deleted") return;
+        if (hideDemo && c.tagOrigin === "demo_reference") return;
         const row = document.createElement("div");
         row.className = "cand" + (i === selectedIdx ? " selected" : "");
         row.innerHTML = `
@@ -218,6 +221,7 @@
             ${["pump","motor","valve","tank","level_switch","level_transmitter","pressure_transmitter","flow_transmitter","emergency_stop_input","sensor","other"]
               .map((t) => `<option value="${t}" ${c.type === t ? "selected" : ""}>${t}</option>`).join("")}
           </select>
+          <span class="conf">${c.tagOrigin === "demo_reference" ? "demo" : "new"}</span>
           <span class="conf">${Math.round((c.confidence || 0) * 100)}%${c.status === "confirmed" ? " ✓" : ""}</span>`;
         const cb = document.createElement("input");
         cb.type = "checkbox";
@@ -236,7 +240,7 @@
           document.getElementById("detail").innerHTML =
             `<b>${escapeHtml(c.tag)}</b> · ${escapeHtml(c.type)}<br>` +
             `Status: ${escapeHtml(c.status || "proposed")} · confidence ${Math.round((c.confidence || 0) * 100)}%<br>` +
-            `Provenance: ${escapeHtml(c.source || "ocr_mine")} · dataClass ${escapeHtml(c.dataClass || "ENGINEERING_INFERENCE")}<br>` +
+            `Origin: ${escapeHtml(c.tagOrigin || "extracted")} · provenance: ${escapeHtml(c.source || "ocr_mine")} · dataClass ${escapeHtml(c.dataClass || "ENGINEERING_INFERENCE")}<br>` +
             `Source position: ${c.sourcePosition ? escapeHtml(JSON.stringify(c.sourcePosition)) : "<i>not provided by current OCR engine (text highlight used)</i>"}`;
           document.getElementById("btnConfirm").disabled = false;
           document.getElementById("btnDelete").disabled = false;
@@ -279,7 +283,7 @@
       candidates = (last.candidates || []).map((c) => ({
         ...c,
         status: "proposed",
-        include: (c.confidence || 0) >= 0.5
+        include: c.tagOrigin !== "demo_reference" && (c.confidence || 0) >= 0.5
       }));
       selectedIdx = -1;
       renderSource(null);
@@ -287,6 +291,8 @@
       document.getElementById("btnAdd").disabled = false;
       out.textContent = last.ok === false ? JSON.stringify(last, null, 2) : "Review left/right, confirm candidates, then promote.";
     };
+
+    document.getElementById("hideDemo")?.addEventListener("change", () => renderList());
 
     document.getElementById("selectAll").onclick = () => {
       candidates.forEach((c) => {

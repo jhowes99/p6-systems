@@ -6,7 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { extractText, mineCandidates } from "../server/plc/ocr_ingest.js";
+import { extractText, mineCandidates, classifyTagOrigin } from "../server/plc/ocr_ingest.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sample = path.join(root, "server/data/samples/ocr_water_transfer.txt");
@@ -28,6 +28,15 @@ if (!extracted.text.trim()) {
 }
 if (missing.length) {
   console.error("FAIL: missing tags", missing.join(", "));
+  process.exit(1);
+}
+const tank = candidates.find((c) => c.tag === "TANK-101");
+if (!tank || tank.tagOrigin !== "demo_reference") {
+  console.error("FAIL: TANK-101 should be tagOrigin demo_reference", tank?.tagOrigin);
+  process.exit(1);
+}
+if (classifyTagOrigin("TANK-201") !== "extracted") {
+  console.error("FAIL: TANK-201 should be extracted");
   process.exit(1);
 }
 console.log("OCR smoke PASS");
