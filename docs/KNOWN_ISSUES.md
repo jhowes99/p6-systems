@@ -34,4 +34,4 @@
 | KI-016 | Studio E2E sensitive to leftover faults (I1 stuck) | Smoke clears faults + runtime reset at start; still sim-only |
 | KI-017 | X-Ray safety / narrative is simulation-only | UI shows sim disclaimer; never claim certified physical safety assessment |
 | KI-018 | CEM 2.0 partial vs §23 | Schema v2, validation, X-Ray model-first adapters, write-path `lastValidation`, impact + Connect stubs shipped; control-sequence UI and Connect/Ignition live prove-out remain open |
-| KI-019 | Ignition live path not proven | Optional `ignition` profile; EULA (`ACCEPT_IGNITION_EULA`) + admin password required; do not claim live tags until OPC/Perspective flow is evidenced |
+| KI-019 | Ignition live path not proven | `p6-ignition` starts but stays in **needs_commissioning: eula** while `.env` has `ACCEPT_IGNITION_EULA=N` and empty `IGNITION_ADMIN_PASSWORD`. P6 OPC UA half is up (`/api/connect/opcua` running, 23 nodes) — Gateway↔OPC tag bind not completed. User must accept EULA + set admin password, then configure Ignition OPC client to `opc.tcp://host.docker.internal:4840/UA/P6Systems` |

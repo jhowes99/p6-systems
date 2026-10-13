@@ -26,7 +26,17 @@ node scripts/regression_all.mjs
 
 **Verified 2026-10-12 (post CEM D / write-validation):** `docker compose … up --build -d p6-app` then `regression_all.mjs` — **11/11 PASS**, studio_e2e **24/24**. Evidence: model-first X-Ray (`relationshipSource`, `derivedFrom`), impact `verifyCatalogRefs`, non-blocking `lastValidation` on writes.
 
-**Ignition live:** not proven in this pass — see KNOWN_ISSUES KI-019 / BUILD_STATUS (EULA + credentials required).
+**Ignition live attempt (same session):**
+
+| Probe | Result |
+|-------|--------|
+| `GET /api/connect/opcua` | PASS — `running:true`, `nodeCount:23`, `opc.tcp://localhost:4840/UA/P6Systems` |
+| `docker compose --profile ignition up -d ignition` | Container started (image 8.3.9) |
+| Gateway logs | `needs_commissioning: eula` |
+| `.env` | `ACCEPT_IGNITION_EULA=N`, `IGNITION_ADMIN_PASSWORD` empty |
+| Ignition OPC client ↔ P6 tag read/write | **NOT PROVEN** |
+
+See KI-019. Core regression remains independent of Ignition.
 
 ## Studio E2E highlights (Phases 2–8)
 

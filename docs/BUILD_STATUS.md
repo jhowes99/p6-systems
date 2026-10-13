@@ -73,8 +73,20 @@
 - Image OCR for scanned P&IDs unfinished (text/PDF extract works)  
 - Verify catalog still one FAT (`P101_ESTOP_SHUTDOWN`) — UI documents limit via `limits[]`  
 
+## Ignition live attempt (2026-10-12)
+
+| Check | Result |
+|-------|--------|
+| P6 OPC UA server | ✓ `GET /api/connect/opcua` — `running:true`, endpoint `opc.tcp://localhost:4840/UA/P6Systems`, `nodeCount:23`, mode SIMULATION |
+| Compose profile `ignition` | ◐ Image `8.3.9` pulled; `p6-ignition` container healthy HTTP |
+| Gateway commissioning | ✗ Logs: `Resources needing commissioning: eula` (`ACCEPT_IGNITION_EULA=N`) |
+| Admin password | ✗ `.env` `IGNITION_ADMIN_PASSWORD` empty |
+| Live tag read/write via Ignition | ✗ Not proven — blocked before OPC client / Perspective bind |
+
+**Verdict:** Ignition live **blocked** (EULA + credentials). Do not claim Connect complete.
+
 ## Next (recommended)
 
-1. Prove Connect live tags with Ignition profile (EULA + admin password; KI-019)  
+1. User: set `ACCEPT_IGNITION_EULA=Y` + strong `IGNITION_ADMIN_PASSWORD` in `.env`, recreate `p6-ignition`, finish Gateway commissioning, bind OPC UA to P6 endpoint  
 2. Add Tank Transfer FAT when real Runtime assertions exist (Phase 7 completion)  
-3. Open PR for `p6/phase0-phase1-foundation` once Ignition attempt documented (KI-001)  
+3. Open PR for `p6/phase0-phase1-foundation` (KI-001)  
