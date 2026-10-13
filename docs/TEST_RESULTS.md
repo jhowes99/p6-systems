@@ -21,10 +21,12 @@ node scripts/regression_all.mjs
 | fat_estop | PASS |
 | ocr | PASS (incl. `tagOrigin` demo_reference) |
 | ignition_udt | PASS |
-| studio_e2e | PASS (**24/24**) |
+| studio_e2e | PASS (**26/26**) |
 | **Total** | **11/11 PASS** |
 
-**Verified 2026-10-12 (post CEM D / write-validation):** `docker compose … up --build -d p6-app` then `regression_all.mjs` — **11/11 PASS**, studio_e2e **24/24**. Evidence: model-first X-Ray (`relationshipSource`, `derivedFrom`), impact `verifyCatalogRefs`, non-blocking `lastValidation` on writes.
+**Verified 2026-10-12 (Studio UX architecture refactor):** `docker compose … up --build -d p6-app` then `regression_all.mjs` — **11/11 PASS**, studio_e2e **26/26**. New markers: five workspace tabs, no `toolFrame` / “Open full page”, native interlocks + I/O + verify catalog, landing Import/Scratch CTAs.
+
+**Prior (post CEM D / write-validation):** model-first X-Ray, impact `verifyCatalogRefs`, non-blocking `lastValidation` on writes.
 
 **Ignition live attempt (same session):**
 
@@ -38,7 +40,7 @@ node scripts/regression_all.mjs
 
 See KI-019. Core regression remains independent of Ignition.
 
-## Studio E2E highlights (Phases 2–8)
+## Studio E2E highlights
 
 | Check | Result |
 |-------|--------|
@@ -48,6 +50,17 @@ See KI-019. Core regression remains independent of Ignition.
 | `/api/runtime/logic` observability | PASS |
 | `verify.html` / `connect.html` UX markers | PASS |
 | Ingest promote / interlocks / knownLimits | PASS |
+| Five-workspace Studio shell (no nested iframe) | PASS |
+| Landing Import / Scratch / Open CTAs | PASS |
+
+### Manual checklist (Studio UX)
+
+- [ ] Design: drag library equipment, connect, Import P&ID promote  
+- [ ] Logic: interlocks list + detail; selection highlights equipment  
+- [ ] I/O: signals table filters to selected equipment  
+- [ ] Simulate: Run/Pause/Speed + scenario; X-Ray on selection  
+- [ ] Verify: catalog Run Test → assertion rows; Events drawer  
+- [ ] Switch workspaces without losing selection / project  
 
 ## Honest limits
 
@@ -55,3 +68,4 @@ See KI-019. Core regression remains independent of Ignition.
 - Stale container images omit new fields — rebuild before claiming milestones  
 - Simulated E-stop / faults — not certified physical safety  
 - Verify still one automated FAT until Tank Transfer assertions are implemented  
+- Control-sequence authoring UI unfinished (Logic sidebar labels it)  

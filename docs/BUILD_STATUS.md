@@ -3,6 +3,25 @@
 **Last updated:** 2026-10-12  
 **Branch:** `p6/phase0-phase1-foundation`  
 
+## Studio UX architecture refactor (Phases 1–10) — ✓ delivered
+
+Inventory: [STUDIO_UX_INVENTORY.md](./STUDIO_UX_INVENTORY.md)
+
+| Phase | Scope | Status |
+|------:|--------|--------|
+| 1 | Remove nested iframe apps / “Open full page” chrome | ✓ Native Logic / I/O / Verify / Ingest panels; `toolFrame` removed |
+| 2 | Five nav categories only: Design · Logic · I/O · Simulate · Verify | ✓ |
+| 3 | Unified layout (top / ws nav / left / canvas / right / sim bar + console) | ✓ |
+| 4 | Selection persists across workspace switches; contextual panels | ✓ |
+| 5 | Compact sim bar + canvas toolbar; advanced under “More” | ✓ |
+| 6 | No nested page scroll; KI-020 grid collapse preserved | ✓ |
+| 7 | Landing → Import P&ID / Scratch / Open existing / Sample | ✓ |
+| 8 | Dark P6 brand; reduced strip/cards/duplicate headings | ✓ |
+| 9 | Same projectId / canonical model across views (no reset) | ✓ |
+| 10 | E2E markers + regression | ✓ **11/11**, studio_e2e **26/26** |
+
+**Honest gaps:** Control-sequence authoring UI unfinished (labeled in Logic). Standalone pages (HMI, electrician, exports, …) remain outside Studio — not re-embedded. Connect live / Ignition still unproven (KI-019).
+
 ## CEM 2.0 (Canonical Engineering Model) — in progress
 
 | Phase | Deliverable | Status |
@@ -62,7 +81,7 @@
 | Check | Result |
 |-------|--------|
 | `node scripts/regression_all.mjs` | **11/11 PASS** (incl. `cem2` + `studio_e2e`) — see TEST_RESULTS |
-| Studio E2E | **24/24** (verify catalog, logic API, verify/connect HTML markers, UX Phases 2–8) |
+| Studio E2E | **26/26** (prior 24 + five-workspace shell markers + landing CTAs) |
 | Demo | http://localhost:3000/studio.html?demo=1 |
 
 ## Out of MVP (honest)
@@ -87,6 +106,7 @@
 
 ## Next (recommended)
 
-1. User: set `ACCEPT_IGNITION_EULA=Y` + strong `IGNITION_ADMIN_PASSWORD` in `.env`, recreate `p6-ignition`, finish Gateway commissioning, bind OPC UA to P6 endpoint  
-2. Add Tank Transfer FAT when real Runtime assertions exist (Phase 7 completion)  
-3. Open PR for `p6/phase0-phase1-foundation` (KI-001)  
+1. Manual Studio checklist: Design place → Logic interlock → I/O filter by selection → Simulate scenario → Verify FAT (same selection)  
+2. User: set `ACCEPT_IGNITION_EULA=Y` + strong `IGNITION_ADMIN_PASSWORD` in `.env`, recreate `p6-ignition`, finish Gateway commissioning  
+3. Add Tank Transfer FAT when real Runtime assertions exist  
+4. Open PR for `p6/phase0-phase1-foundation` (KI-001)  

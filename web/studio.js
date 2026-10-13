@@ -41,7 +41,8 @@
   let ilkCornerByEq = new Map();
   let ilkPollTick = 0;
   let selectedLinkId = null;
-  let workspaceMode = "simulation"; // engineering | simulation | diagnostic
+  let workspaceMode = "engineering"; // engineering | simulation | diagnostic (canvas behavior)
+  let workspace = "design"; // design | logic | io | simulate | verify
   let rafId = 0;
   let pollInFlight = false;
   let lastPollAt = 0;
@@ -59,8 +60,10 @@
   const undoStack = [];
   const redoStack = [];
   const UNDO_MAX = 40;
-  const toolPanel = document.getElementById("toolPanel");
+  const toolPanel = document.getElementById("toolPanel"); // legacy — removed from shell
   const toolFrame = document.getElementById("toolFrame");
+  const ioPanelPanel = document.getElementById("ioPanel");
+  const verifyWorkspacePanel = document.getElementById("verifyWorkspacePanel");
 
   /** Stable scene-graph: id -> element (never cleared on routine live updates) */
   const nodeEls = new Map();
@@ -483,7 +486,7 @@
       { label: "Inspect", action: () => { setSelection([node.id], node.id); inspTab = "overview"; syncInspTabs(); renderInspector(); } },
       { label: "Configure", action: () => { setSelection([node.id], node.id); inspTab = "overview"; syncInspTabs(); studio.classList.add("show-inspector"); renderInspector(); } },
       { label: "Control", action: () => { setSelection([node.id], node.id); inspTab = "control"; syncInspTabs(); renderInspector(); } },
-      { label: "X-Ray / Why blocked?", action: () => { setSelection([node.id], node.id); setWorkspaceMode("diagnostic"); } },
+      { label: "X-Ray / Why blocked?", action: () => { setSelection([node.id], node.id); setWorkspace("simulate", { xray: true }); } },
       { label: "Show Interlocks (inside)", action: () => { setSelection([node.id], node.id); openInterlocksPanel({ equipmentId: node.id }); } },
       { label: "Inspect I/O", action: () => { setSelection([node.id], node.id); inspTab = "io"; syncInspTabs(); renderInspector(); } },
       { sep: true },
@@ -609,6 +612,44 @@
     }
   }
 
+  async function refreshProjectList() {
+    const host = document.getElementById("projectList");
+    if (!host) return;
+    try {
+      const d = await api("/api/model/projects");
+      const projects = d.projects || d || [];
+      const list = Array.isArray(projects) ? projects : [];
+      if (!list.length) {
+        host.innerHTML = `<span class="muted">No projects yet — Import P&ID or New from scratch.</span>`;
+        return;
+      }
+      host.innerHTML = list
+        .map((p) => `<button type="button" data-pid="${esc(p.id)}">${esc(p.name || p.id)}${p.id === projectId ? " · active" : ""}</button>`)
+        .join("");
+      host.querySelectorAll("[data-pid]").forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api("/api/model/projects/active", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ projectId: btn.getAttribute("data-pid") })
+            });
+            await refreshProject();
+            await refreshCanvas();
+            await refreshProjectList();
+            fitViewSoon(2, { force: true });
+            logEvent(`Opened project ${btn.textContent}`, "ok");
+            setWorkspace("design");
+          } catch (e) {
+            logEvent(e.message, "alarm");
+          }
+        };
+      });
+    } catch (e) {
+      host.innerHTML = `<span class="warn">${esc(e.message)}</span>`;
+    }
+  }
+
   async function refreshProject() {
     const d = await api("/api/model/projects/active");
     const p = d.project;
@@ -628,6 +669,7 @@
     }
     if (inspTab === "control" && selected) renderInspector();
     if (!selected && workspaceMode === "diagnostic") renderInspectorEmptyLogic();
+    if (workspace === "io") refreshIoPanel().catch(() => {});
   }
 
   function logicObservabilityHtml() {
@@ -1296,6 +1338,8 @@
     studio.classList.remove("collapsed-insp");
     studio.classList.add("show-inspector");
     document.getElementById("console")?.classList.add("collapsed");
+    // Refit after sidebar collapse retargets the grid so canvas keeps the 1fr track
+    if (!userViewLocked) fitViewSoon(2);
   }
 
   function fitXraySelected() {
@@ -1364,7 +1408,7 @@
 
     // Stay in X-Ray on the root-cause equipment
     if (node) {
-      setWorkspaceMode("diagnostic");
+      setWorkspace("simulate", { xray: true });
       inspTab = "xray";
       syncInspTabs();
       await loadXray(node);
@@ -1583,10 +1627,10 @@
       });
     });
     document.getElementById("btnOpenVerifyPage")?.addEventListener("click", () => {
-      openEmbed("/verify.html", "P6 Verify");
+      setWorkspace("verify");
     });
     document.getElementById("btnOpenIlkFromXray")?.addEventListener("click", () => {
-      openInterlocksPanel({ equipmentId: selected?.id });
+      setWorkspace("logic", { equipmentId: selected?.id });
     });
     document.getElementById("btnRefreshXray").onclick = async () => {
       if (selected) {
@@ -2151,6 +2195,17 @@
           });
         };
       }
+    } else if (inspTab === "logic") {
+      body.innerHTML = `${rejectHtml}
+        ${logicObservabilityHtml()}
+        <p class="muted">Logic observability from Runtime · selection preserved across workspace tabs.</p>
+        <button type="button" id="btnOpenIlkFromLogic">Open interlocks workspace</button>`;
+      document.getElementById("btnOpenIlkFromLogic")?.addEventListener("click", () => {
+        setWorkspace("logic", { equipmentId: selected?.id });
+      });
+      refreshLogicStatus().then(() => {
+        if (inspTab === "logic" && selected) renderInspector();
+      }).catch(() => {});
     } else if (inspTab === "interlocks") {
       body.innerHTML = `${rejectHtml}<p class="muted">Loading interlocks…</p>`;
       loadInterlocks({ equipmentId: selected.id }).then(() => {
@@ -2272,6 +2327,8 @@
       : `<div class="verifyRow ${pass ? "ok" : "alarm"}">${esc(testName || testId)} ${pass ? "PASS" : "FAIL"}</div>`;
     wrap.innerHTML = html;
     verifyLog.prepend(wrap.firstElementChild);
+    const wsLog = document.getElementById("verifyWorkspaceLog");
+    if (wsLog) wsLog.prepend(wrap.firstElementChild.cloneNode(true));
     document.querySelector('[data-actab="verify"]')?.click();
     document.getElementById("console")?.classList.remove("collapsed");
   }
@@ -2343,50 +2400,202 @@
     if (out) out.textContent = JSON.stringify({ opcua: opc, mqtt, engineering: eng }, null, 2);
   }
 
-  function setView(v) {
-    view = v;
-    const map = view === "map";
-    const connect = view === "connect";
-    document.getElementById("viewTitle").textContent = map ? "Engineering map" : connect ? "P6 Connect" : "Tool";
-    connectPanel.classList.toggle("hidden", !connect);
-    viewport.style.display = map ? "" : "none";
-    if (map || connect) {
-      closeEmbed();
-      closeIngestPanel();
-      closeInterlocksPanel({ keepHighlight: connect ? false : true });
-    }
-    document.querySelectorAll(".navItem[data-view]").forEach((el) => {
-      el.classList.toggle("active", el.getAttribute("data-view") === v);
+  function hideAllWorkspacePanels() {
+    connectPanel?.classList.add("hidden");
+    document.getElementById("interlocksPanel")?.classList.add("hidden");
+    document.getElementById("ingestPanel")?.classList.add("hidden");
+    ioPanelPanel?.classList.add("hidden");
+    verifyWorkspacePanel?.classList.add("hidden");
+    if (toolPanel) toolPanel.classList.add("hidden");
+    if (toolFrame && toolFrame.src && toolFrame.src !== "about:blank") toolFrame.src = "about:blank";
+  }
+
+  /** Five workspace categories only — selection + project model persist. */
+  function setWorkspace(ws, opts = {}) {
+    const next = ["design", "logic", "io", "simulate", "verify"].includes(ws) ? ws : "design";
+    workspace = next;
+    studio.setAttribute("data-workspace", next);
+    document.querySelectorAll(".wsTab").forEach((b) => {
+      const on = b.getAttribute("data-ws") === next;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
     });
-    if (connect) refreshConnect().catch((e) => logEvent(String(e.message), "alarm"));
+    document.querySelectorAll("[data-ws-side]").forEach((el) => {
+      el.classList.toggle("hidden", el.getAttribute("data-ws-side") !== next);
+    });
+
+    hideAllWorkspacePanels();
+    const titles = {
+      design: "Design",
+      logic: "Logic",
+      io: "I/O",
+      simulate: "Simulate",
+      verify: "Verify"
+    };
+    const hints = {
+      design: "place · connect · configure · Import P&ID",
+      logic: "interlocks · conditions · inhibits · selection focused",
+      io: "live Runtime signals · filter by selection",
+      simulate: "run · scenarios · X-Ray · watch process",
+      verify: "FAT catalog · assertion evidence"
+    };
+    document.getElementById("viewTitle").textContent = titles[next];
+    document.getElementById("modeHint").textContent = hints[next];
+
+    if (next === "design") {
+      view = "map";
+      viewport.classList.remove("hidden");
+      viewport.style.display = "";
+      setWorkspaceMode("engineering", { silent: true });
+      if (opts.openIngest) openIngestPanel({ stayInWorkspace: true });
+      if (opts.openConnect) {
+        view = "connect";
+        viewport.classList.add("hidden");
+        connectPanel.classList.remove("hidden");
+        refreshConnect().catch((e) => logEvent(String(e.message), "alarm"));
+      }
+    } else if (next === "logic") {
+      view = "interlocks";
+      viewport.classList.add("hidden");
+      setWorkspaceMode("diagnostic", { silent: true });
+      openInterlocksPanel({
+        equipmentId: opts.equipmentId || selected?.id,
+        selectId: opts.selectId,
+        stayInWorkspace: true
+      });
+      if (selected) {
+        inspTab = "interlocks";
+        [...document.getElementById("inspTabs").querySelectorAll("button")].forEach((x) =>
+          x.classList.toggle("active", x.dataset.tab === "interlocks")
+        );
+        renderInspector();
+      }
+    } else if (next === "io") {
+      view = "io";
+      viewport.classList.add("hidden");
+      setWorkspaceMode("engineering", { silent: true });
+      ioWorkspacePanel?.classList.remove("hidden");
+      refreshIoPanel().catch((e) => logEvent(e.message, "alarm"));
+      if (selected) {
+        inspTab = "io";
+        [...document.getElementById("inspTabs").querySelectorAll("button")].forEach((x) =>
+          x.classList.toggle("active", x.dataset.tab === "io")
+        );
+        renderInspector();
+      }
+    } else if (next === "simulate") {
+      view = "map";
+      viewport.classList.remove("hidden");
+      viewport.style.display = "";
+      setWorkspaceMode("simulation", { silent: true });
+      if (opts.xray === true) setXrayMode(true);
+      else if (opts.xray === false) setXrayMode(false);
+    } else if (next === "verify") {
+      view = "verify";
+      viewport.classList.add("hidden");
+      setWorkspaceMode("simulation", { silent: true });
+      verifyWorkspacePanel?.classList.remove("hidden");
+      loadVerifyCatalog().catch((e) => logEvent(e.message, "alarm"));
+    }
+
+    document.querySelectorAll(".navItem[data-view]").forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-view") === view);
+    });
+    if (!userViewLocked && (next === "design" || next === "simulate")) fitViewSoon(2);
+  }
+
+  function setView(v) {
+    if (v === "connect") {
+      setWorkspace("design", { openConnect: true });
+      return;
+    }
+    if (v === "map") {
+      setWorkspace(workspace === "simulate" ? "simulate" : "design");
+      return;
+    }
+    setWorkspace("design");
   }
 
   function openEmbed(url, title) {
-    if (!toolPanel || !toolFrame || !url) return;
-    closeIngestPanel();
-    closeInterlocksPanel({ keepHighlight: false });
-    view = "tool";
-    connectPanel.classList.add("hidden");
-    viewport.style.display = "none";
-    toolPanel.classList.remove("hidden");
-    document.getElementById("toolTitle").textContent = title || "Tool";
-    document.getElementById("viewTitle").textContent = title || "Tool";
-    const ext = document.getElementById("toolOpenExt");
-    if (ext) ext.href = url;
-    // Cache-bust lightly so embedded tools see fresh model after Studio edits
-    const sep = url.includes("?") ? "&" : "?";
-    toolFrame.src = `${url}${sep}embed=1&t=${Date.now()}`;
-    logEvent(`Opened ${title || url} (embedded)`, "ok");
+    // Nested full-app iframes removed — fold into workspace or open standalone honestly.
+    logEvent(`${title || url}: open from landing / dedicated page (not embedded in Studio)`, "ok");
+    if (url && /verify/i.test(url)) setWorkspace("verify");
+    else if (url && /interlock/i.test(url)) setWorkspace("logic");
+    else if (url && /monitor|tag/i.test(url)) setWorkspace("io");
+    else if (url && /ingest|pid/i.test(url)) setWorkspace("design", { openIngest: true });
+    else if (url && /connect/i.test(url)) setWorkspace("design", { openConnect: true });
   }
 
   function closeEmbed() {
-    if (!toolPanel || !toolFrame) return;
-    toolPanel.classList.add("hidden");
-    if (toolFrame.src && toolFrame.src !== "about:blank") toolFrame.src = "about:blank";
-    if (view === "tool") {
-      view = "map";
-      viewport.style.display = "";
-      document.getElementById("viewTitle").textContent = "Engineering map";
+    if (toolPanel) toolPanel.classList.add("hidden");
+    if (toolFrame && toolFrame.src && toolFrame.src !== "about:blank") toolFrame.src = "about:blank";
+  }
+
+  async function refreshIoPanel() {
+    const body = document.getElementById("ioBody");
+    const meta = document.getElementById("ioMeta");
+    if (!body) return;
+    const d = await api("/api/runtime/signals");
+    const signals = d.signals || [];
+    const q = (document.getElementById("ioSearch")?.value || "").trim().toLowerCase();
+    const selectedOnly = !!document.getElementById("ioSelectedOnly")?.checked;
+    const selTag = selected?.tag || "";
+    const selIds = selected ? new Set([selected.tag, ...(selected.signals || []).map((s) => s.tag)]) : new Set();
+    let rows = signals;
+    if (selectedOnly && selected) {
+      rows = rows.filter((s) => {
+        const tag = s.tag || "";
+        return tag === selTag || tag.startsWith(selTag + ".") || selIds.has(tag) ||
+          (selected.signals || []).some((x) => x.tag === tag);
+      });
+    }
+    if (q) rows = rows.filter((s) => String(s.tag || "").toLowerCase().includes(q));
+    if (meta) {
+      meta.textContent = selected
+        ? `${rows.length} signal(s) · focused ${selected.tag}`
+        : `${rows.length} signal(s) · select equipment to focus`;
+    }
+    if (!rows.length) {
+      body.innerHTML = `<p class="muted">No signals match${selectedOnly && selected ? ` for ${esc(selected.tag)}` : ""}.</p>`;
+      return;
+    }
+    body.innerHTML = `<table class="ioTable"><thead><tr><th>Tag</th><th>Value</th><th>Type</th></tr></thead><tbody>${rows
+      .slice(0, 200)
+      .map((s) => {
+        const hilite = selected && String(s.tag || "").startsWith(selected.tag);
+        return `<tr class="${hilite ? "hilite" : ""}"><td>${esc(s.tag)}</td><td>${esc(String(s.currentValue ?? s.value ?? "—"))}</td><td>${esc(s.dataType || s.type || "—")}</td></tr>`;
+      })
+      .join("")}</tbody></table>`;
+  }
+
+  async function loadVerifyCatalog() {
+    const host = document.getElementById("verifyCatalog");
+    if (!host) return;
+    try {
+      const tests = window.P6VerifyUI
+        ? await P6VerifyUI.fetchCatalog()
+        : (await api("/api/verify/tests")).tests || [];
+      if (!tests.length) {
+        host.innerHTML = `<p class="muted">No FAT tests in catalog.</p>`;
+        return;
+      }
+      host.innerHTML = tests
+        .map(
+          (t) => `<div class="verifyTest">
+            <div><b>${esc(t.name || t.id)}</b><div class="muted">${esc(t.description || t.id)}</div></div>
+            <button type="button" data-fat="${esc(t.id)}">Run</button>
+          </div>`
+        )
+        .join("");
+      const limits = tests.flatMap?.((t) => t.limits || []) || [];
+      if (!limits.length) {
+        /* catalog may expose limits at top level via API */
+      }
+      host.querySelectorAll("[data-fat]").forEach((btn) => {
+        btn.onclick = () => runFat(btn.getAttribute("data-fat")).catch((e) => logEvent(e.message, "alarm"));
+      });
+    } catch (e) {
+      host.innerHTML = `<p class="warn">${esc(e.message)}</p>`;
     }
   }
 
@@ -2484,7 +2693,8 @@
 
   async function runScenario(name) {
     setPlayback(false);
-    setWorkspaceMode("simulation");
+    if (workspace !== "simulate") setWorkspace("simulate");
+    else setWorkspaceMode("simulation", { silent: true });
     const cmd = (tag, value, pulse) => sendCommand(tag, value, !!pulse);
     try {
       const before = await captureSignalSnapshot();
@@ -2660,46 +2870,37 @@
     });
     logEvent(`History recording ${e.target.checked ? "on" : "off"}`, "ok");
   });
-  document.getElementById("btnCloseTool")?.addEventListener("click", () => {
-    closeEmbed();
-    setView("map");
-  });
-  document.querySelectorAll("[data-embed]").forEach((el) => {
-    el.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      const url = el.getAttribute("data-embed");
-      const title = el.getAttribute("data-embed-title") || url;
-      openEmbed(url, title);
-      if (el.hasAttribute("data-wf")) {
-        activeWorkflow = el.getAttribute("data-wf");
-        document.querySelectorAll("#workflowStrip button").forEach((b) =>
-          b.classList.toggle("active", b.getAttribute("data-wf") === activeWorkflow)
-        );
-      }
-    });
+  document.querySelectorAll(".wsTab").forEach((btn) => {
+    btn.addEventListener("click", () => setWorkspace(btn.getAttribute("data-ws")));
   });
   document.querySelectorAll("[data-scenario]").forEach((el) => {
-    el.addEventListener("click", () => runScenario(el.getAttribute("data-scenario")));
-  });
-  document.querySelectorAll("#workflowStrip [data-view]").forEach((el) => {
     el.addEventListener("click", () => {
-      closeEmbed();
-      setView(el.getAttribute("data-view") || "map");
-      const mode = el.getAttribute("data-wsmode-set");
-      if (mode) setWorkspaceMode(mode);
-      activeWorkflow = el.getAttribute("data-wf");
-      document.querySelectorAll("#workflowStrip button").forEach((b) =>
-        b.classList.toggle("active", b.getAttribute("data-wf") === activeWorkflow)
-      );
+      setWorkspace("simulate");
+      runScenario(el.getAttribute("data-scenario"));
     });
   });
-  document.getElementById("wfVerify")?.addEventListener("click", () => {
-    activeWorkflow = "verify";
-    document.querySelectorAll("#workflowStrip button").forEach((b) =>
-      b.classList.toggle("active", b.getAttribute("data-wf") === "verify")
-    );
-    runFat();
-    document.querySelector('[data-actab="verify"]')?.click();
+  document.getElementById("navImportPid")?.addEventListener("click", () => setWorkspace("design", { openIngest: true }));
+  document.getElementById("navScratch")?.addEventListener("click", () => openWizard(1));
+  document.getElementById("navOpenExisting")?.addEventListener("click", () => {
+    setWorkspace("design");
+    refreshProjectList().catch((e) => logEvent(e.message, "alarm"));
+    document.getElementById("projectList")?.scrollIntoView({ block: "nearest" });
+  });
+  document.getElementById("btnSettings")?.addEventListener("click", () => {
+    const ov = document.getElementById("settingsOverlay");
+    const host = document.getElementById("settingsLimits");
+    if (host) host.innerHTML = document.getElementById("limitsList")?.innerHTML || "<li class='muted'>No limits loaded</li>";
+    ov?.classList.remove("hidden");
+  });
+  document.getElementById("btnSettingsClose")?.addEventListener("click", () => {
+    document.getElementById("settingsOverlay")?.classList.add("hidden");
+  });
+  document.getElementById("btnIoRefresh")?.addEventListener("click", () => refreshIoPanel().catch((e) => logEvent(e.message, "alarm")));
+  document.getElementById("ioSearch")?.addEventListener("input", () => {
+    if (workspace === "io") refreshIoPanel().catch(() => {});
+  });
+  document.getElementById("ioSelectedOnly")?.addEventListener("change", () => {
+    if (workspace === "io") refreshIoPanel().catch(() => {});
   });
   document.getElementById("selSimSpeed")?.addEventListener("change", async (e) => {
     const scanMs = Number(e.target.value);
@@ -3035,23 +3236,30 @@
   }
 
   async function openInterlocksPanel(opts = {}) {
+    if (!opts.stayInWorkspace && workspace !== "logic") {
+      setWorkspace("logic", { equipmentId: opts.equipmentId, selectId: opts.selectId });
+      return;
+    }
     closeEmbed();
-    closeIngestPanel();
+    document.getElementById("ingestPanel")?.classList.add("hidden");
     interlocksPanel?.classList.remove("hidden");
     view = "interlocks";
-    document.getElementById("viewTitle").textContent = "Interlocks";
-    document.querySelectorAll(".navItem[data-view]").forEach((el) => el.classList.remove("active"));
+    document.getElementById("viewTitle").textContent = "Logic";
     document.getElementById("navInterlocks")?.classList.add("active");
     try {
       await loadInterlocks(opts.equipmentId ? { equipmentId: opts.equipmentId } : {});
-      // If filtered empty, reload full list
       if (opts.equipmentId && !(interlocksData?.interlocks || []).length) {
         await loadInterlocks();
       }
       renderIlkList();
       if (opts.selectId) selectInterlock(opts.selectId);
       else if ((interlocksData?.interlocks || []).length) {
-        selectInterlock(interlocksData.interlocks[0].id);
+        const prefer = opts.equipmentId
+          ? (interlocksData.interlocks.find((i) =>
+              (i.inhibits || []).some((h) => h.equipmentId === opts.equipmentId || h.id === opts.equipmentId)
+            ) || interlocksData.interlocks[0])
+          : interlocksData.interlocks[0];
+        selectInterlock(prefer.id);
       } else {
         renderIlkDetail();
       }
@@ -3071,16 +3279,16 @@
       selectedInterlockId = null;
       clearInterlockHighlight();
     }
-    if (view === "interlocks") {
+    if (view === "interlocks" && workspace === "logic") {
+      /* stay on logic workspace — panel closed only when switching away via setWorkspace */
+    } else if (view === "interlocks") {
       view = "map";
+      viewport.classList.remove("hidden");
       viewport.style.display = "";
-      document.getElementById("viewTitle").textContent = "Engineering map";
-      document.querySelector('.navItem[data-view="map"]')?.classList.add("active");
     }
   }
 
-  document.getElementById("navInterlocks")?.addEventListener("click", () => openInterlocksPanel());
-  document.getElementById("btnCloseInterlocks")?.addEventListener("click", () => closeInterlocksPanel());
+  document.getElementById("navInterlocks")?.addEventListener("click", () => setWorkspace("logic"));
   document.getElementById("btnIlkRefresh")?.addEventListener("click", async () => {
     await loadInterlocks();
     renderIlkList();
@@ -3090,7 +3298,7 @@
   document.getElementById("btnIlkShowMap")?.addEventListener("click", () => {
     const ilk = (interlocksData?.interlocks || []).find((i) => i.id === selectedInterlockId);
     if (ilk) applyInterlockHighlight(ilk);
-    closeInterlocksPanel({ keepHighlight: true });
+    setWorkspace("simulate");
     fitViewSoon(2);
   });
 
@@ -3101,28 +3309,30 @@
   let ingestSelected = -1;
   const ingestPanel = document.getElementById("ingestPanel");
 
-  function openIngestPanel() {
+  function openIngestPanel(opts = {}) {
+    if (!opts.stayInWorkspace && workspace !== "design") {
+      setWorkspace("design", { openIngest: true });
+      return;
+    }
     closeEmbed();
     closeInterlocksPanel({ keepHighlight: false });
     connectPanel.classList.add("hidden");
-    viewport.style.display = "none";
+    viewport.classList.add("hidden");
     if (toolPanel) toolPanel.classList.add("hidden");
     ingestPanel?.classList.remove("hidden");
     view = "ingest";
-    document.getElementById("viewTitle").textContent = "Ingest";
-    setWorkspaceMode("engineering");
+    document.getElementById("viewTitle").textContent = "Import P&ID";
+    setWorkspaceMode("engineering", { silent: true });
     activeWorkflow = "upload";
-    document.querySelectorAll("#workflowStrip button").forEach((b) =>
-      b.classList.toggle("active", ["upload", "review", "map"].includes(b.getAttribute("data-wf")))
-    );
   }
 
   function closeIngestPanel() {
     ingestPanel?.classList.add("hidden");
     if (view === "ingest") {
       view = "map";
+      viewport.classList.remove("hidden");
       viewport.style.display = "";
-      document.getElementById("viewTitle").textContent = "Engineering map";
+      document.getElementById("viewTitle").textContent = "Design";
     }
   }
 
@@ -3191,13 +3401,10 @@
     }
   }
 
-  document.getElementById("navIngest")?.addEventListener("click", openIngestPanel);
-  document.getElementById("wfUpload")?.addEventListener("click", openIngestPanel);
-  document.getElementById("wfReview")?.addEventListener("click", openIngestPanel);
-  document.getElementById("wfMap")?.addEventListener("click", () => {
-    document.getElementById("btnIngestPromote")?.click();
+  document.getElementById("btnCloseIngest")?.addEventListener("click", () => {
+    closeIngestPanel();
+    setWorkspace("design");
   });
-  document.getElementById("btnCloseIngest")?.addEventListener("click", closeIngestPanel);
 
   document.getElementById("btnIngestExtract")?.addEventListener("click", async () => {
     const f = document.getElementById("ingestFile")?.files?.[0];
@@ -3310,14 +3517,11 @@
         "ok"
       );
       closeIngestPanel();
-      setWorkspaceMode("engineering");
+      setWorkspace("design");
       await refreshProject();
       await refreshCanvas();
       fitView();
       activeWorkflow = "configure";
-      document.querySelectorAll("#workflowStrip button").forEach((b) =>
-        b.classList.toggle("active", b.getAttribute("data-wf") === "configure")
-      );
     } catch (e) {
       logEvent("Promote failed: " + e.message, "alarm");
     }
@@ -3417,12 +3621,13 @@
           applyXrayPathHighlight();
           syncCanvas(lastCanvas);
           renderInspector();
+          if (!userViewLocked) fitViewSoon(2);
         });
       } else {
         xrayData = null;
         if (lastCanvas) syncCanvas(lastCanvas);
+        if (!userViewLocked) fitViewSoon(2);
       }
-      if (!userViewLocked) fitViewSoon(2);
     } else {
       xrayData = null;
       ilkHighlightIds = new Set();
@@ -3438,10 +3643,22 @@
     }
   }
 
-  document.getElementById("btnConnectMode").onclick = () => setConnectMode(!connectMode);
-  document.getElementById("btnXray").onclick = () => setXrayMode(!xrayMode);
-  document.getElementById("btnVerify").onclick = runFat;
-  document.getElementById("navVerify").onclick = runFat;
+  document.getElementById("btnConnectMode")?.addEventListener("click", () => {
+    setWorkspace("design");
+    setConnectMode(!connectMode);
+  });
+  document.getElementById("btnXray")?.addEventListener("click", () => {
+    if (workspace !== "simulate") setWorkspace("simulate");
+    setXrayMode(!xrayMode);
+  });
+  document.getElementById("btnVerify")?.addEventListener("click", () => {
+    setWorkspace("verify");
+    runFat().catch((e) => logEvent(e.message, "alarm"));
+  });
+  document.getElementById("navVerify")?.addEventListener("click", () => {
+    setWorkspace("verify");
+    runFat().catch((e) => logEvent(e.message, "alarm"));
+  });
   const chkMotion = document.getElementById("chkMotion");
   if (chkMotion) {
     chkMotion.checked = motionEnabled;
@@ -3717,8 +3934,6 @@
     renderWizard();
   }
 
-  document.getElementById("btnWizard").onclick = () => openWizard(1);
-  document.getElementById("navWizard").onclick = () => openWizard(wizardState.step || 1);
   document.getElementById("btnWizardClose").onclick = closeWizard;
   document.getElementById("btnWizardBack").onclick = () => {
     if (wizardStep > 1) {
@@ -3729,7 +3944,7 @@
   document.getElementById("btnWizardSkip").onclick = () => wizardAdvance(true).catch((e) => logEvent(e.message, "alarm"));
   document.getElementById("btnWizardNext").onclick = () => wizardAdvance(false).catch((e) => logEvent(e.message, "alarm"));
 
-  function setWorkspaceMode(mode) {
+  function setWorkspaceMode(mode, opts = {}) {
     const next = ["engineering", "simulation", "diagnostic"].includes(mode) ? mode : "simulation";
     workspaceMode = next;
     studio.classList.toggle("mode-engineering", next === "engineering");
@@ -3738,28 +3953,22 @@
     document.querySelectorAll("[data-wsmode]").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-wsmode") === next);
     });
+    if (opts.silent) {
+      if (next === "diagnostic") refreshLogicStatus().catch(() => {});
+      else if (xrayMode && next !== "diagnostic") { /* keep caller control */ }
+      if (lastCanvas) syncCanvas(lastCanvas);
+      return;
+    }
     if (next === "diagnostic") {
-      document.getElementById("viewTitle").textContent = "Diagnostic map";
       enterDiagnosticWorkspace();
       setXrayMode(true);
       refreshLogicStatus().catch(() => {});
       if (!selected) renderInspectorEmptyLogic();
     } else {
       if (xrayMode) setXrayMode(false);
-      if (next === "engineering") {
-        document.getElementById("modeHint").textContent = "Engineering · place, connect, configure";
-        document.getElementById("viewTitle").textContent = "Engineering map";
-      } else {
-        document.getElementById("modeHint").textContent = "Simulation · operate equipment · watch process";
-        document.getElementById("viewTitle").textContent = "Runtime map";
-      }
       if (lastCanvas) syncCanvas(lastCanvas);
     }
   }
-
-  document.querySelectorAll("[data-wsmode]").forEach((btn) => {
-    btn.onclick = () => setWorkspaceMode(btn.getAttribute("data-wsmode"));
-  });
 
   // Autosave layout after idle
   const autosaveTimer = setInterval(() => {
@@ -3769,14 +3978,22 @@
   const params = new URLSearchParams(location.search);
   async function boot() {
     applyTransform();
-    setWorkspaceMode(params.get("mode") || "simulation");
+    const wsParam = params.get("ws") || params.get("workspace");
+    const modeParam = params.get("mode");
+    let initialWs = "design";
+    if (wsParam && ["design", "logic", "io", "simulate", "verify"].includes(wsParam)) initialWs = wsParam;
+    else if (modeParam === "simulation" || params.get("demo") === "1") initialWs = "simulate";
+    else if (modeParam === "diagnostic") initialWs = "simulate";
+    else if (modeParam === "engineering") initialWs = "design";
+    setWorkspace(initialWs);
     await refreshProject();
+    await refreshProjectList();
     await refreshStatus();
     await refreshCanvas();
     await loadPlatformLimits();
     await refreshIlkCorners();
     fitViewSoon(4, { force: true });
-    logEvent("P6 Studio ready — Fit all shows the whole plant · red lock = interlock · expand Alarms for LIMIT items", "ok");
+    logEvent("P6 Studio ready — Design · Logic · I/O · Simulate · Verify · same model across views", "ok");
     if (params.get("demo") === "1") {
       await api("/api/runtime/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       logEvent("Sample plant: runtime started", "ok");
@@ -3784,7 +4001,8 @@
       await refreshCanvas();
       fitViewSoon(3, { force: true });
     }
-    if (params.get("wizard") === "1") openWizard(1);
+    if (params.get("wizard") === "1" || params.get("scratch") === "1") openWizard(1);
+    if (params.get("ingest") === "1") setWorkspace("design", { openIngest: true });
   }
 
   boot().catch((e) => logEvent("Boot failed: " + e.message, "alarm"));

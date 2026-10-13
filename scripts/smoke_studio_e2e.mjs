@@ -364,6 +364,26 @@ try {
   assert(connectHtml.includes("data-connect-cards"), "connect.html overview cards");
   ok("verify + connect UX markers");
 
+  // Studio UX architecture — five workspace categories, no nested iframe chrome
+  const studioHtml = await fetch(`${base}/studio.html`).then((r) => r.text());
+  assert(studioHtml.includes('data-ws="design"'), "studio Design workspace tab");
+  assert(studioHtml.includes('data-ws="logic"'), "studio Logic workspace tab");
+  assert(studioHtml.includes('data-ws="io"'), "studio I/O workspace tab");
+  assert(studioHtml.includes('data-ws="simulate"'), "studio Simulate workspace tab");
+  assert(studioHtml.includes('data-ws="verify"'), "studio Verify workspace tab");
+  assert(studioHtml.includes('id="workspaceNav"'), "studio workspace nav");
+  assert(!studioHtml.includes('id="toolFrame"'), "studio removed nested tool iframe");
+  assert(!studioHtml.includes("Open full page"), "studio removed Open full page chrome");
+  assert(studioHtml.includes('id="interlocksPanel"'), "studio native interlocks panel");
+  assert(studioHtml.includes('id="ioPanel"'), "studio native I/O panel");
+  assert(studioHtml.includes('data-verify-catalog'), "studio inline verify catalog");
+  ok("studio five-workspace shell markers");
+
+  const landingHtml = await fetch(`${base}/landing.html`).then((r) => r.text());
+  assert(/IMPORT P&amp;ID|ingest=1/i.test(landingHtml), "landing Import P&ID entry");
+  assert(/scratch=1|START FROM SCRATCH/i.test(landingHtml), "landing scratch entry");
+  ok("landing project entry CTAs");
+
   console.log(`\nStudio E2E: ${steps.length}/${steps.length} passed`);
 } catch (e) {
   console.error("FAIL:", e.message);

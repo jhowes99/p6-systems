@@ -209,6 +209,8 @@ body.p6-app .wrap .muted {
 }
 body.p6-app .wrap pre,
 body.p6-app .wrap .card,
+body.p6-app .wrap .panel,
+body.p6-app .wrap .stats > div,
 body.p6-app .wrap details {
   background: rgba(18, 38, 61, 0.9) !important;
   border-color: var(--p6-border) !important;
@@ -244,3 +246,10 @@ body.p6-app .wrap a { color: var(--p6-cyan); }
 
 /* Legacy class stubs so old markup does not explode */
 .appShell, .appShellBar, .toolbar { display: none; }
+
+/* Embedded content mode — no nested Studio/shell chrome */
+body.p6-embed #appShell,
+body.p6-embed .p6Header,
+body.p6-embed .p6SideNav { display: none !important; }
+body.p6-embed > main,
+body.p6-embed > .wrap { margin-left: 0 !important; }

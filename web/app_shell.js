@@ -165,6 +165,14 @@
   async function mount() {
     const host = document.getElementById("appShell");
     if (!host) return;
+    // Studio (and any future host) may iframe tools with ?embed=1 — skip nested app chrome
+    try {
+      if (new URLSearchParams(location.search).get("embed") === "1") {
+        document.body.classList.add("p6-embed");
+        host.remove();
+        return;
+      }
+    } catch (_) { /* ignore */ }
 
     ensureFonts();
     document.body.classList.add("p6-app");

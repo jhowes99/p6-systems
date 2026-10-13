@@ -15,7 +15,7 @@
 | ID | Issue | Impact | Mitigation |
 |----|-------|--------|------------|
 | KI-004 | TON timers historically wall-clock | Deterministic FAT timing | Sim clock present in Runtime smokes; keep validating FATs |
-| KI-005 | Studio tool pages still full navigations | Closed (MVP) | Tools embed in Studio iframe; full SPA optional later |
+| KI-005 | Studio tool pages still full navigations | Closed | Studio UX refactor: five workspaces + native panels; no nested iframe chrome. Standalone pages remain outside Studio |
 | KI-006 | Customer branding still Axiom/Ironclad | Closed | UI/docs/logos use P6 Systems / P6 Verify; legacy compose service names may remain |
 | KI-007 | Allen-Bradley export is placeholder | Must not claim vendor support | Keep labeled; validate before claiming |
 | KI-008 | Ignition live path optional / unproven | Must not claim Connect complete | Profile `ignition`; prove live tags before claiming |
@@ -35,3 +35,7 @@
 | KI-017 | X-Ray safety / narrative is simulation-only | UI shows sim disclaimer; never claim certified physical safety assessment |
 | KI-018 | CEM 2.0 partial vs §23 | Schema v2, validation, X-Ray model-first adapters, write-path `lastValidation`, impact + Connect stubs shipped; control-sequence UI and Connect/Ignition live prove-out remain open |
 | KI-019 | Ignition live path not proven | `p6-ignition` starts but stays in **needs_commissioning: eula** while `.env` has `ACCEPT_IGNITION_EULA=N` and empty `IGNITION_ADMIN_PASSWORD`. P6 OPC UA half is up (`/api/connect/opcua` running, 23 nodes) — Gateway↔OPC tag bind not completed. User must accept EULA + set admin password, then configure Ignition OPC client to `opc.tcp://host.docker.internal:4840/UA/P6Systems` |
+| KI-020 | Studio X-Ray layout (collapsed sidebar + `display:none`) | Closed — collapsing sidebar now retargets `.studioBody` grid so canvas keeps `1fr`; inspector capped ~380px with internal scroll |
+| KI-021 | Runtime (`simulation.html`) light-on-white + stale tags | Closed — dark panels match shell; equipment rows use canonical tags (`ESD-101`, `VALVE-101`, …) with aliases; no raw `undefined` |
+| KI-022 | Studio UX nested iframe apps | Closed — Design/Logic/I/O/Simulate/Verify shell; inventory in `docs/STUDIO_UX_INVENTORY.md` |
+| KI-023 | Control sequence authoring UI | Open — Logic workspace shows model interlocks + Runtime logic observability; sequence editor unfinished (honest label) |

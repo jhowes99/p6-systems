@@ -16,10 +16,12 @@
   --p6-muted: #8aa0b5;
   --p6-font: "DM Sans", system-ui, sans-serif;
   --p6-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --toolbar-h: auto;
-  --console-h: 140px;
+  --toolbar-h: 52px;
+  --ws-nav-h: 40px;
+  --console-h: 36px;
+  --sim-bar-h: 40px;
   --sidebar-w: 220px;
-  --inspector-w: 280px;
+  --inspector-w: 300px;
 }
 
 * { box-sizing: border-box; }
@@ -34,32 +36,67 @@ html, body {
 
 .studio {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   height: 100vh;
   width: 100vw;
   max-height: 100dvh;
+  overflow: hidden;
 }
 
-/* —— Toolbar —— */
-.studioToolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 0.35rem 0.65rem;
-  background: linear-gradient(180deg, #0e2035, var(--p6-bg1));
-  border-bottom: 1px solid var(--p6-border);
-  z-index: 20;
-  min-height: 0;
-  flex-shrink: 0;
-}
-.toolbarRow {
+/* —— Top bar —— */
+.studioTop {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+  padding: 0.3rem 0.65rem;
+  background: linear-gradient(180deg, #0e2035, var(--p6-bg1));
+  border-bottom: 1px solid var(--p6-border);
+  z-index: 20;
+  min-height: var(--toolbar-h);
+  flex-shrink: 0;
   flex-wrap: wrap;
-  min-width: 0;
 }
-.toolbarRowMain { width: 100%; }
+.studioToolbar { /* legacy alias */
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.3rem 0.65rem;
+  background: linear-gradient(180deg, #0e2035, var(--p6-bg1));
+  border-bottom: 1px solid var(--p6-border);
+}
+.topActions { margin-left: auto; justify-content: flex-end; }
+
+/* —— Workspace nav (5 categories only) —— */
+.workspaceNav {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--p6-bg2);
+  border-bottom: 1px solid var(--p6-border);
+  flex-shrink: 0;
+  min-height: var(--ws-nav-h);
+  z-index: 19;
+}
+.wsTab {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--p6-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.1rem;
+  cursor: pointer;
+}
+.wsTab:hover { color: var(--p6-ink); background: rgba(40,197,255,0.06); }
+.wsTab.active {
+  color: var(--p6-cyan);
+  border-bottom-color: var(--p6-cyan);
+  background: rgba(40,197,255,0.08);
+}
 .studioBrand {
   display: inline-flex;
   align-items: center;
@@ -179,6 +216,7 @@ html, body {
 }
 .runtimeActions { flex: 0 1 auto; }
 .toolActions { flex: 1 1 auto; justify-content: flex-end; }
+.studioTop .studioActions button,
 .studioActions button,
 .studioActions a.btn {
   appearance: none;
@@ -238,11 +276,16 @@ html, body {
 .studioInspector {
   background: var(--p6-bg2);
   border-color: var(--p6-border);
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
+  min-width: 0;
 }
-.studioSidebar { border-right: 1px solid var(--p6-border); }
-.studioInspector { border-left: 1px solid var(--p6-border); }
+.studioSidebar { border-right: 1px solid var(--p6-border); overflow: auto; }
+.studioInspector {
+  border-left: 1px solid var(--p6-border);
+  display: flex;
+  flex-direction: column;
+}
 
 .navSection {
   border-bottom: 1px solid var(--p6-border);
@@ -285,10 +328,213 @@ html, body {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(800px 400px at 20% 0%, rgba(22,143,240,0.08), transparent 55%),
     var(--p6-bg1);
   position: relative;
+}
+.sideCtx.hidden { display: none; }
+.sideCtx .unfinished { color: var(--p6-amber); }
+.projectList {
+  padding: 0.25rem 0.85rem 0.65rem;
+  font-size: 0.72rem;
+  max-height: 140px;
+  overflow: auto;
+}
+.projectList button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--p6-ink);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0;
+  cursor: pointer;
+}
+.projectList button:hover { color: var(--p6-cyan); }
+.mainStage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.simBar {
+  display: none;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  border-top: 1px solid var(--p6-border);
+  background: rgba(7,20,38,0.92);
+  flex-shrink: 0;
+  min-height: var(--sim-bar-h);
+}
+.studio[data-workspace="simulate"] .simBar,
+.studio[data-workspace="verify"] .simBar { display: flex; }
+.simBarHint { font-size: 0.65rem; margin-left: auto; }
+.simBarActions {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.simBarActions button {
+  appearance: none;
+  border: 1px solid var(--p6-border);
+  background: var(--p6-panel2);
+  color: var(--p6-ink);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.28rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.simBarActions button.primary {
+  background: linear-gradient(135deg, var(--p6-blue), var(--p6-teal));
+  border-color: transparent;
+  color: #041018;
+}
+.canvasTools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.canvasTools button {
+  appearance: none;
+  border: 1px solid var(--p6-border);
+  background: var(--p6-panel2);
+  color: var(--p6-ink);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.canvasTools button:hover { border-color: var(--p6-cyan); }
+.advCanvas {
+  position: relative;
+  font-size: 0.65rem;
+}
+.advCanvas summary {
+  cursor: pointer;
+  color: var(--p6-muted);
+  list-style: none;
+  padding: 0.2rem 0.4rem;
+}
+.advCanvas summary::-webkit-details-marker { display: none; }
+.advCanvas[open] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--p6-border);
+  border-radius: 6px;
+  background: var(--p6-panel);
+}
+.wsPanelHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--p6-border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.wsPanelHead .toolBarActions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
+.wsPanelHead .toolBarActions button {
+  appearance: none;
+  border: 1px solid var(--p6-border);
+  background: var(--p6-panel2);
+  color: var(--p6-ink);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wsPanelHead .toolBarActions button.primary {
+  background: linear-gradient(135deg, var(--p6-blue), var(--p6-teal));
+  border-color: transparent;
+  color: #041018;
+}
+.ioPanel,
+.verifyWorkspacePanel {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  background: var(--p6-bg1);
+}
+.ioPanel.hidden,
+.verifyWorkspacePanel.hidden { display: none; }
+.ioBody,
+.verifyBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem;
+}
+.verifyCatalog { margin-bottom: 0.75rem; }
+.verifyCatalog .verifyTest {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--p6-border);
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+  background: rgba(0,0,0,0.22);
+}
+.verifyCatalog .verifyTest button {
+  margin-left: auto;
+  appearance: none;
+  border: 1px solid var(--p6-border);
+  background: var(--p6-panel2);
+  color: var(--p6-ink);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ioTable { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+.ioTable th, .ioTable td {
+  text-align: left;
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid var(--p6-border);
+  font-family: var(--p6-mono);
+}
+.ioTable th { color: var(--p6-muted); font-weight: 600; font-size: 0.65rem; letter-spacing: 0.04em; }
+.ioTable tr.hilite { background: rgba(40,197,255,0.1); }
+.settingsOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(4,12,22,0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.settingsOverlay.hidden { display: none; }
+.settingsPanel {
+  width: min(480px, 96vw);
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--p6-panel);
+  border: 1px solid var(--p6-border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
 }
 .canvasBar {
   display: flex;
@@ -455,8 +701,8 @@ html, body {
   transition: width 220ms ease, max-height 220ms ease, opacity 180ms ease, transform 220ms ease;
 }
 .canvasViewport {
-  position: relative;
-  flex: 1;
+  position: absolute;
+  inset: 0;
   min-height: 0;
   overflow: hidden;
   cursor: grab;
@@ -465,6 +711,7 @@ html, body {
     linear-gradient(90deg, rgba(40,197,255,0.05) 1px, transparent 1px) 0 0 / 28px 28px,
     #0a1828;
 }
+.canvasViewport.hidden { display: none; }
 .canvasViewport.panning { cursor: grabbing; }
 .canvasWorld {
   position: absolute;
@@ -601,14 +848,20 @@ html, body {
 }
 .connectPanel {
   position: absolute;
-  inset: 36px 0 0 0;
-  background: rgba(7,20,38,0.96);
-  padding: 1rem 1.25rem;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  background: var(--p6-bg1);
+  padding: 0;
   overflow: auto;
-  z-index: 5;
 }
 .connectPanel.hidden { display: none; }
+.connectPanel .warn,
+.connectPanel .connectCards,
+.connectPanel .advDetails { margin: 0.75rem 1rem; }
 .connectPanel h3 { margin: 0 0 0.75rem; }
+.workflowStrip { display: none !important; /* removed — five workspace tabs replace step strip */ }
 .mono {
   font-family: var(--p6-mono);
   font-size: 0.72rem;
@@ -631,6 +884,7 @@ html, body {
 .inspectorHead {
   padding: 0.75rem 0.85rem;
   border-bottom: 1px solid var(--p6-border);
+  flex-shrink: 0;
 }
 .inspectorHead h2 {
   margin: 0;
@@ -643,6 +897,7 @@ html, body {
   gap: 0.25rem;
   padding: 0.5rem 0.65rem;
   border-bottom: 1px solid var(--p6-border);
+  flex-shrink: 0;
 }
 .inspectorTabs button {
   border: 1px solid transparent;
@@ -660,6 +915,10 @@ html, body {
   background: rgba(22,143,240,0.12);
 }
 .inspectorBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 0.75rem 0.85rem;
   font-size: 0.8rem;
 }
@@ -1092,31 +1351,58 @@ html, body {
 .studio.collapsed-insp {
   --inspector-w: 0px;
 }
+/*
+ * display:none removes the panel from CSS grid auto-placement. Without retargeting
+ * columns, collapsing the sidebar parks .studioMain in the 0px track and lets the
+ * inspector steal 1fr — the X-Ray "blown up" layout.
+ */
+.studio.collapsed-side:not(.collapsed-insp) .studioBody {
+  grid-template-columns: minmax(0, 1fr) var(--inspector-w);
+}
+.studio.collapsed-insp:not(.collapsed-side) .studioBody {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+.studio.collapsed-side.collapsed-insp .studioBody {
+  grid-template-columns: minmax(0, 1fr);
+}
 .studio.collapsed-side .studioSidebar,
 .studio.collapsed-insp .studioInspector {
   display: none;
 }
 
+/* Diag / X-Ray: slightly wider inspector, still capped so canvas stays primary */
+.studio.mode-diagnostic:not(.collapsed-insp),
+.studio.xray-mode:not(.collapsed-insp) {
+  --inspector-w: min(380px, 36vw);
+}
+
 @media (max-width: 1100px) {
   .studioBody {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .studio.collapsed-side:not(.collapsed-insp) .studioBody,
+  .studio.collapsed-insp:not(.collapsed-side) .studioBody,
+  .studio.collapsed-side.collapsed-insp .studioBody {
+    grid-template-columns: minmax(0, 1fr);
   }
   .studioInspector {
     display: none;
   }
   .studio.show-inspector .studioInspector {
-    display: block;
+    display: flex;
+    flex-direction: column;
     position: absolute;
     right: 0;
-    top: var(--toolbar-h);
-    bottom: var(--console-h);
-    width: min(320px, 90vw);
+    top: 0;
+    bottom: 0;
+    width: min(360px, 90vw);
+    max-width: 420px;
     z-index: 15;
     box-shadow: -8px 0 24px rgba(0,0,0,0.4);
   }
 }
 @media (max-width: 720px) {
-  .studioBody { grid-template-columns: 1fr; }
+  .studioBody { grid-template-columns: minmax(0, 1fr); }
   .studioSidebar { display: none; }
   .studioProjectMeta { display: none; }
 }
@@ -1649,28 +1935,25 @@ html, body {
 .ingestHead { font-weight: 700; color: var(--p6-muted); border-bottom: 1px solid var(--p6-border); margin-bottom: 0.25rem; }
 .ingestDocMeta { max-height: 220px; overflow: auto; font-size: 0.68rem; }
 
-.xrayWorkspace { display: flex; flex-direction: column; gap: 0.65rem; font-size: 0.75rem; }
+/* Prefer Phase 1 X-Ray rules above; keep compact dashboard sizing in the panel */
+.xrayWorkspace { font-size: 0.75rem; max-width: 100%; }
 .xraySection { border-top: 1px solid var(--p6-border); padding-top: 0.5rem; }
-.xraySectionTitle { margin: 0 0 0.35rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--p6-muted); }
-.xrayChips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
-.xrayChip { padding: 0.15rem 0.45rem; border-radius: 999px; border: 1px solid var(--p6-border); font-size: 0.68rem; font-family: var(--p6-mono); }
-.xrayChip.warnChip { border-color: rgba(245,158,11,0.5); color: var(--p6-amber); }
-.xrayDashGrid { display: flex; flex-direction: column; gap: 0.5rem; }
-.xrayGroupLabel { margin: 0 0 0.15rem; font-size: 0.68rem; color: var(--p6-muted); font-weight: 600; }
-.xrayPath { list-style: none; margin: 0; padding: 0; }
-.xrayPathStep { display: flex; gap: 0.5rem; padding: 0.35rem 0.25rem; border-left: 3px solid rgba(40,197,255,0.35); margin-bottom: 0.25rem; cursor: pointer; border-radius: 4px; }
-.xrayPathStep.isBlocking { border-left-color: rgba(239,68,68,0.65); background: rgba(239,68,68,0.08); }
-.xrayPathRole { font-size: 0.65rem; font-weight: 700; color: var(--p6-muted); min-width: 4.5rem; }
-.xrayPathBody { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
-.xrayNarrative p { margin: 0.35rem 0; line-height: 1.45; }
-.xrayAdvanced .xrayAdvPre { max-height: 200px; overflow: auto; font-size: 0.65rem; }
+.xrayBlock,
+.xrayOk { font-size: 0.75rem; word-break: break-word; }
+.xrayDashGrid { display: flex; flex-direction: column; gap: 0.4rem; }
+.xrayPathRole { min-width: 4.5rem; max-width: 5.5rem; }
 .condList li.isWarning { background: rgba(245,158,11,0.12); border-radius: 4px; }
 
-.inspectorBody { overflow-y: auto; max-height: calc(100vh - var(--toolbar-h) - var(--console-h) - 7rem); }
-
 @media (max-width: 1400px) {
+  /* Auto-collapse sidebar in Diag when not already collapsed — retarget grid (same display:none pitfall) */
   .studio.mode-diagnostic:not(.collapsed-side) { --sidebar-w: 0px; }
   .studio.mode-diagnostic:not(.collapsed-side) .studioSidebar { display: none; }
+  .studio.mode-diagnostic:not(.collapsed-side):not(.collapsed-insp) .studioBody {
+    grid-template-columns: minmax(0, 1fr) var(--inspector-w);
+  }
+  .studio.mode-diagnostic:not(.collapsed-side).collapsed-insp .studioBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 @media (min-width: 1366px) and (max-width: 1500px) {
   .workflowStrip button { font-size: 0.62rem; padding: 0.25rem 0.35rem; }

@@ -10,147 +10,136 @@
   <link rel="stylesheet" href="studio.css" />
 </head>
 <body>
-  <div class="studio" id="studio">
-    <header class="studioToolbar">
-      <div class="toolbarRow toolbarRowMain">
-        <a class="studioBrand" href="/landing.html" title="P6 Systems — Studio" aria-label="P6 Systems Studio">
-          <span class="brandMark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" width="34" height="34" focusable="false">
-              <defs>
-                <linearGradient id="p6MarkGrad" x1="8" y1="40" x2="40" y2="8" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stop-color="#168FF0"/>
-                  <stop offset="55%" stop-color="#28C5FF"/>
-                  <stop offset="100%" stop-color="#20B8A6"/>
-                </linearGradient>
-              </defs>
-              <path fill="url(#p6MarkGrad)" d="M24 4.5c1.1 0 2.1.5 2.8 1.4l16.2 22.1c1.4 1.9.1 4.5-2.2 4.5H7.2c-2.3 0-3.6-2.6-2.2-4.5L21.2 5.9c.7-.9 1.7-1.4 2.8-1.4z"/>
-              <g fill="none" stroke="#071426" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
-                <circle cx="24" cy="14.5" r="2.4"/>
-                <path d="M24 17v4.2M18.5 24.5h11M18.5 24.5v5.5M29.5 24.5v5.5M21.2 30h5.6"/>
-                <circle cx="18.5" cy="24.5" r="1.5"/>
-                <circle cx="29.5" cy="24.5" r="1.5"/>
-              </g>
-              <circle cx="33.5" cy="33.5" r="5.2" fill="#12263d" stroke="#28C5FF" stroke-width="1.2"/>
-              <path d="M31.4 33.5l1.4 1.4 3-3" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="brandWordmark">
-            <span class="brandName">P6</span>
-            <span class="brandSub">Systems</span>
-            <span class="brandSurface">Studio</span>
-          </span>
-        </a>
-        <div class="studioProject">
-          <div class="studioProjectName" id="projectName">Loading project…</div>
-          <div class="studioProjectMeta" id="projectMeta">—</div>
-        </div>
-        <div class="studioStatus">
-          <span class="pill" id="pillMode">MODE</span>
-          <span class="pill" id="pillRun">RUNTIME</span>
-          <span class="pill" id="pillSim">SIM</span>
-          <span class="pill" id="pillSave">SAVE</span>
-        </div>
-        <div class="studioActions runtimeActions">
-          <button type="button" class="primary" data-rt="start">Run</button>
-          <button type="button" data-rt="pause">Pause</button>
-          <button type="button" data-rt="resume">Resume</button>
-          <button type="button" data-rt="stop">Stop</button>
-          <button type="button" data-rt="reset">Reset</button>
-          <label class="chk speedChk">Speed
-            <select id="selSimSpeed" title="Scan interval (virtual time pacing)">
-              <option value="200">0.25×</option>
-              <option value="100">0.5×</option>
-              <option value="50" selected>1×</option>
-              <option value="25">2×</option>
-              <option value="10">5×</option>
-            </select>
-          </label>
-        </div>
-        <div class="studioActions toolActions">
-          <button type="button" id="btnFit" title="Fit all equipment in view">Fit all</button>
-          <button type="button" id="btnZoomSel" title="Zoom to selection">Sel</button>
-          <button type="button" id="btnZoomIn" title="Zoom in">+</button>
-          <button type="button" id="btnZoomOut" title="Zoom out">−</button>
-          <button type="button" id="btnUndo" title="Undo layout (Ctrl+Z)">Undo</button>
-          <button type="button" id="btnRedo" title="Redo layout (Ctrl+Y)">Redo</button>
-          <button type="button" id="btnSaveLayout" class="modeHideSim modeHideDiag">Save layout</button>
-          <button type="button" id="btnConnectMode" class="modeHideSim modeHideDiag">Connect</button>
-          <button type="button" id="btnXray" class="modeHideEng">X-Ray</button>
-          <button type="button" id="btnVerify" class="modeHideEng">Run Test</button>
-          <button type="button" id="btnSnapshot" class="modeHideDiag" title="Engineering snapshot">Snap</button>
-          <button type="button" id="btnWizard">New</button>
-          <button type="button" id="btnToggleSide" title="Toggle sidebar">Side</button>
-          <button type="button" id="btnToggleInsp" title="Toggle inspector">Insp</button>
-          <a class="linkish" href="/landing.html">Exit</a>
-        </div>
+  <div class="studio" id="studio" data-workspace="design">
+    <header class="studioTop">
+      <a class="studioBrand" href="/landing.html" title="P6 Systems — Studio" aria-label="P6 Systems Studio">
+        <span class="brandMark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="34" height="34" focusable="false">
+            <defs>
+              <linearGradient id="p6MarkGrad" x1="8" y1="40" x2="40" y2="8" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#168FF0"/>
+                <stop offset="55%" stop-color="#28C5FF"/>
+                <stop offset="100%" stop-color="#20B8A6"/>
+              </linearGradient>
+            </defs>
+            <path fill="url(#p6MarkGrad)" d="M24 4.5c1.1 0 2.1.5 2.8 1.4l16.2 22.1c1.4 1.9.1 4.5-2.2 4.5H7.2c-2.3 0-3.6-2.6-2.2-4.5L21.2 5.9c.7-.9 1.7-1.4 2.8-1.4z"/>
+            <g fill="none" stroke="#071426" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+              <circle cx="24" cy="14.5" r="2.4"/>
+              <path d="M24 17v4.2M18.5 24.5h11M18.5 24.5v5.5M29.5 24.5v5.5M21.2 30h5.6"/>
+              <circle cx="18.5" cy="24.5" r="1.5"/>
+              <circle cx="29.5" cy="24.5" r="1.5"/>
+            </g>
+            <circle cx="33.5" cy="33.5" r="5.2" fill="#12263d" stroke="#28C5FF" stroke-width="1.2"/>
+            <path d="M31.4 33.5l1.4 1.4 3-3" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="brandWordmark">
+          <span class="brandName">P6</span>
+          <span class="brandSub">Systems</span>
+          <span class="brandSurface">Studio</span>
+        </span>
+      </a>
+      <div class="studioProject">
+        <div class="studioProjectName" id="projectName">Loading project…</div>
+        <div class="studioProjectMeta" id="projectMeta">—</div>
+      </div>
+      <div class="studioStatus">
+        <span class="pill" id="pillMode">MODE</span>
+        <span class="pill" id="pillRun">RUNTIME</span>
+        <span class="pill" id="pillSim">SIM</span>
+        <span class="pill" id="pillSave">SAVE</span>
+      </div>
+      <div class="studioActions topActions">
+        <button type="button" id="btnUndo" title="Undo layout (Ctrl+Z)">Undo</button>
+        <button type="button" id="btnRedo" title="Redo layout (Ctrl+Y)">Redo</button>
+        <button type="button" id="btnSaveLayout" title="Save layout (Ctrl+S)">Save</button>
+        <button type="button" id="btnToggleSide" title="Toggle tools">Tools</button>
+        <button type="button" id="btnToggleInsp" title="Toggle properties">Props</button>
+        <button type="button" id="btnSettings" title="Settings / limits">Settings</button>
+        <a class="linkish" href="/landing.html">Exit</a>
       </div>
     </header>
 
+    <nav class="workspaceNav" id="workspaceNav" role="tablist" aria-label="Engineering workspace">
+      <button type="button" class="wsTab active" data-ws="design" role="tab" aria-selected="true">Design</button>
+      <button type="button" class="wsTab" data-ws="logic" role="tab" aria-selected="false">Logic</button>
+      <button type="button" class="wsTab" data-ws="io" role="tab" aria-selected="false">I/O</button>
+      <button type="button" class="wsTab" data-ws="simulate" role="tab" aria-selected="false">Simulate</button>
+      <button type="button" class="wsTab" data-ws="verify" role="tab" aria-selected="false">Verify</button>
+    </nav>
+
     <div class="studioBody">
       <aside class="studioSidebar" id="sidebar">
-        <details class="navSection" open>
-          <summary>PROJECT EXPLORER</summary>
-          <button type="button" class="navItem active" data-view="map">Studio canvas</button>
-          <button type="button" class="navItem" id="navWizard">New project wizard</button>
-          <button type="button" class="navItem" data-embed="/versions.html" data-embed-title="Projects">Projects</button>
-          <button type="button" class="navItem" id="navIngest">Ingest P&amp;ID / docs</button>
-          <button type="button" class="navItem" data-embed="/ingest.html" data-embed-title="Documents (full page)">Documents (full)</button>
-        </details>
-        <details class="navSection" open>
-          <summary>EQUIPMENT LIBRARY</summary>
-          <input type="search" id="libSearch" class="libSearch" placeholder="Search components…" />
-          <div class="libList" id="libList"></div>
-          <p class="libHint">Drag onto canvas · creates real model equipment</p>
-        </details>
-        <details class="navSection" open>
-          <summary>ENGINEERING TOOLS</summary>
-          <button type="button" class="navItem" data-embed="/pid_import.html" data-embed-title="P&amp;ID Mapping">P&amp;ID Mapping</button>
-          <button type="button" class="navItem" id="navInterlocks">Interlocks · inside</button>
-          <button type="button" class="navItem" data-embed="/interlocks.html" data-embed-title="Ladder explain (legacy)">Ladder explain</button>
-          <button type="button" class="navItem" data-embed="/safety.html" data-embed-title="Safety">Safety</button>
-        </details>
-        <details class="navSection" open>
-          <summary>LOGIC</summary>
-          <button type="button" class="navItem" data-embed="/logic.html" data-embed-title="Logic">Logic</button>
-          <button type="button" class="navItem" data-embed="/control_narrative.html" data-embed-title="Control narrative">Control narrative</button>
-        </details>
-        <details class="navSection" open>
-          <summary>I/O MAPPING</summary>
-          <button type="button" class="navItem" data-embed="/monitor.html" data-embed-title="I/O monitor">I/O monitor</button>
-          <button type="button" class="navItem" data-embed="/electrician.html" data-embed-title="Electrician">Electrician</button>
-        </details>
-        <details class="navSection" open>
-          <summary>RUNTIME</summary>
-          <button type="button" class="navItem" data-view="map">Runtime map</button>
-          <button type="button" class="navItem" data-embed="/hmi.html" data-embed-title="HMI">HMI</button>
-          <button type="button" class="navItem" data-embed="/timeline.html" data-embed-title="Sequencing">Sequencing</button>
-        </details>
-        <details class="navSection" open>
-          <summary>VERIFICATION</summary>
-          <button type="button" class="navItem" id="navVerify">Run FAT</button>
-          <button type="button" class="navItem" data-embed="/verify.html" data-embed-title="P6 Verify">P6 Verify</button>
-          <button type="button" class="navItem" data-embed="/tests.html" data-embed-title="Tests">Tests</button>
-          <button type="button" class="navItem" data-embed="/validation.html" data-embed-title="Validation">Validation</button>
-        </details>
-        <details class="navSection" open>
-          <summary>CONNECTIONS</summary>
-          <button type="button" class="navItem" data-view="connect">Connect <span class="navBadge">optional</span></button>
-          <button type="button" class="navItem" data-embed="/exports.html" data-embed-title="Exports">Exports <span class="navBadge">AB placeholder</span></button>
-          <button type="button" class="navItem" data-embed="/security.html" data-embed-title="Security">Security</button>
-        </details>
-        <details class="navSection" open>
-          <summary>SCENARIOS (SIM)</summary>
-          <button type="button" class="navItem" data-scenario="normal_start">Normal startup</button>
-          <button type="button" class="navItem" data-scenario="valve_close">Close valve</button>
-          <button type="button" class="navItem" data-scenario="pump_fault">Pump fault</button>
-          <button type="button" class="navItem" data-scenario="high_level">High level</button>
-          <button type="button" class="navItem" data-scenario="estop">E-stop <span class="navBadge">model only</span></button>
-          <button type="button" class="navItem" data-scenario="clear">Clear faults / reset</button>
-          <p class="libHint">E-stop / faults demonstrate Runtime logic — not certified physical safety.</p>
-          <p class="libHint">Scenario diffs log live Runtime signals. Timeline playback overlays recorded tags — it does not rewind plant physics.</p>
-        </details>
+        <div class="sideCtx" data-ws-side="design">
+          <details class="navSection" open>
+            <summary>Project</summary>
+            <button type="button" class="navItem" id="navImportPid">Import P&amp;ID / docs</button>
+            <button type="button" class="navItem" id="navScratch">New from scratch</button>
+            <button type="button" class="navItem" id="navOpenExisting">Open existing</button>
+            <div id="projectList" class="projectList muted">—</div>
+          </details>
+          <details class="navSection" open>
+            <summary>Equipment library</summary>
+            <input type="search" id="libSearch" class="libSearch" placeholder="Search components…" />
+            <div class="libList" id="libList"></div>
+            <p class="libHint">Drag onto canvas · creates real model equipment</p>
+          </details>
+          <details class="navSection">
+            <summary>Design tools</summary>
+            <button type="button" class="navItem" id="btnConnectMode">Connect equipment</button>
+            <button type="button" class="navItem" data-view="connect">Connect status <span class="navBadge">optional</span></button>
+            <p class="libHint">Exports / AB PLC remain placeholders — see Settings.</p>
+          </details>
+        </div>
+
+        <div class="sideCtx hidden" data-ws-side="logic">
+          <details class="navSection" open>
+            <summary>Logic</summary>
+            <button type="button" class="navItem active" id="navInterlocks">Interlocks</button>
+            <p class="libHint">Conditions · inhibits · live Runtime state. Selection focuses equipment.</p>
+            <p class="libHint unfinished">Control sequence authoring UI unfinished — use model interlocks + Runtime logic observability.</p>
+          </details>
+        </div>
+
+        <div class="sideCtx hidden" data-ws-side="io">
+          <details class="navSection" open>
+            <summary>Signals</summary>
+            <input type="search" id="ioSearch" class="libSearch" placeholder="Filter tags…" />
+            <label class="chk"><input type="checkbox" id="ioSelectedOnly" checked /> Selected equipment only</label>
+            <button type="button" class="navItem" id="btnIoRefresh">Refresh signals</button>
+            <p class="libHint">Live Runtime tags from the canonical model. Right panel shows I/O for selection.</p>
+          </details>
+        </div>
+
+        <div class="sideCtx hidden" data-ws-side="simulate">
+          <details class="navSection" open>
+            <summary>Scenarios</summary>
+            <button type="button" class="navItem" data-scenario="normal_start">Normal startup</button>
+            <button type="button" class="navItem" data-scenario="valve_close">Close valve</button>
+            <button type="button" class="navItem" data-scenario="pump_fault">Pump fault</button>
+            <button type="button" class="navItem" data-scenario="high_level">High level</button>
+            <button type="button" class="navItem" data-scenario="estop">E-stop <span class="navBadge">model only</span></button>
+            <button type="button" class="navItem" data-scenario="clear">Clear faults / reset</button>
+            <p class="libHint">E-stop / faults demonstrate Runtime logic — not certified physical safety.</p>
+          </details>
+          <details class="navSection" open>
+            <summary>Diagnostics</summary>
+            <button type="button" class="navItem" id="btnXray">X-Ray</button>
+            <p class="libHint">Timeline playback overlays recorded signals — does not rewind plant physics.</p>
+          </details>
+        </div>
+
+        <div class="sideCtx hidden" data-ws-side="verify">
+          <details class="navSection" open>
+            <summary>FAT / tests</summary>
+            <button type="button" class="navItem" id="navVerify">Run FAT</button>
+            <button type="button" class="navItem" id="btnSnapshot">Engineering snapshot</button>
+            <p class="libHint">Catalog from `/api/verify/tests`. One real FAT today — no fake pass/fail.</p>
+          </details>
+        </div>
+
         <details class="navSection" id="limitsSection">
-          <summary>PLATFORM LIMITS</summary>
+          <summary>Platform limits</summary>
           <ul class="limitsList" id="limitsList">
             <li class="muted">Loading honesty checklist…</li>
           </ul>
@@ -158,134 +147,171 @@
       </aside>
 
       <main class="studioMain">
-        <div class="workflowStrip" id="workflowStrip" aria-label="Engineering workflow">
-          <button type="button" data-wf="upload" id="wfUpload">STEP 1 · Upload document</button>
-          <button type="button" data-wf="review" id="wfReview">STEP 2 · Review equipment</button>
-          <button type="button" data-wf="map" id="wfMap">STEP 3 · Place on diagram</button>
-          <button type="button" data-wf="configure" data-view="map" data-wsmode-set="engineering">STEP 4 · Configure</button>
-          <button type="button" data-wf="simulate" data-view="map" data-wsmode-set="simulation">STEP 5 · Update simulation</button>
-          <button type="button" data-wf="verify" id="wfVerify">Run Test</button>
-        </div>
-        <div class="canvasBar">
+        <div class="canvasBar" id="canvasBar">
           <div class="canvasBarLeft">
-            <div class="wsModeGroup" role="group" aria-label="Workspace mode">
-              <button type="button" data-wsmode="engineering" title="Engineering mode">Eng</button>
-              <button type="button" data-wsmode="simulation" class="active" title="Simulation mode">Sim</button>
-              <button type="button" data-wsmode="diagnostic" title="Diagnostic / X-Ray mode">Diag</button>
-            </div>
             <div class="canvasTitleBlock">
-              <strong id="viewTitle">Engineering map</strong>
-              <span class="muted" id="modeHint">drag · wheel zoom · Fit all</span>
+              <strong id="viewTitle">Design</strong>
+              <span class="muted" id="modeHint">pan · wheel zoom · Fit all</span>
             </div>
             <span class="playbackPill hidden" id="playbackPill" title="Overlays recorded signals — does not rewind plant physics">PLAYBACK · signal overlay</span>
           </div>
           <div class="canvasBarRight">
-            <div class="viewToggles" title="Canvas display options">
+            <div class="canvasTools" id="canvasTools">
+              <button type="button" id="btnFit" title="Fit all">Fit</button>
+              <button type="button" id="btnZoomSel" title="Zoom to selection">Sel</button>
+              <button type="button" id="btnZoomIn" title="Zoom in">+</button>
+              <button type="button" id="btnZoomOut" title="Zoom out">−</button>
               <label class="chk"><input type="checkbox" id="chkSnap" checked /> Snap</label>
-              <label class="chk"><input type="checkbox" id="chkGuides" checked /> Guides</label>
-              <label class="chk"><input type="checkbox" id="chkMotion" checked /> Motion</label>
-              <label class="chk"><input type="checkbox" id="chkLayerEq" checked /> Equip</label>
-              <label class="chk"><input type="checkbox" id="chkLayerInst" checked /> Instr</label>
-              <label class="chk"><input type="checkbox" id="chkLayerProc" checked /> Process</label>
-              <label class="chk"><input type="checkbox" id="chkLayerSig" checked /> Signal</label>
+              <details class="advCanvas">
+                <summary>More</summary>
+                <label class="chk"><input type="checkbox" id="chkGuides" checked /> Guides</label>
+                <label class="chk"><input type="checkbox" id="chkMotion" checked /> Motion</label>
+                <label class="chk"><input type="checkbox" id="chkLayerEq" checked /> Equip</label>
+                <label class="chk"><input type="checkbox" id="chkLayerInst" checked /> Instr</label>
+                <label class="chk"><input type="checkbox" id="chkLayerProc" checked /> Process</label>
+                <label class="chk"><input type="checkbox" id="chkLayerSig" checked /> Signal</label>
+              </details>
             </div>
             <div id="canvasMeta">—</div>
           </div>
         </div>
-        <div class="canvasViewport" id="viewport">
-          <div class="canvasWorld" id="world">
-            <svg class="links" id="links"></svg>
-            <svg class="guides" id="guides" aria-hidden="true"></svg>
-            <div id="stage"></div>
-            <div class="marquee hidden" id="marquee"></div>
-          </div>
-          <div class="minimap" id="minimap" title="Mini-map · click to pan">
-            <canvas id="minimapCanvas" width="140" height="90"></canvas>
-          </div>
-        </div>
-        <div class="ctxMenu hidden" id="ctxMenu" role="menu"></div>
-        <div class="connectPanel hidden" id="connectPanel">
-          <h3>P6 Connect</h3>
-          <p class="warn" id="connectLimitWarn">
-            Ignition / OPC live path is <b>optional and unproven</b>. Core Studio + Runtime run without Ignition.
-            Live plant write-back stays gated off. Status below is connectivity state — not a claim of proven live tags.
-          </p>
-          <div class="connectCards" id="connectCards"></div>
-          <details class="advDetails connectAdvanced">
-            <summary>Advanced (raw connectivity JSON)</summary>
-            <pre id="connectOut" class="mono"></pre>
-          </details>
-        </div>
-        <div class="toolPanel hidden" id="toolPanel">
-          <div class="toolBar">
-            <strong id="toolTitle">Tool</strong>
-            <span class="muted">Embedded · canvas project state preserved</span>
-            <div class="toolBarActions">
-              <a id="toolOpenExt" href="#" target="_blank" rel="noopener">Open full page</a>
-              <button type="button" id="btnCloseTool">Back to canvas</button>
+
+        <div class="mainStage" id="mainStage">
+          <div class="canvasViewport" id="viewport">
+            <div class="canvasWorld" id="world">
+              <svg class="links" id="links"></svg>
+              <svg class="guides" id="guides" aria-hidden="true"></svg>
+              <div id="stage"></div>
+              <div class="marquee hidden" id="marquee"></div>
+            </div>
+            <div class="minimap" id="minimap" title="Mini-map · click to pan">
+              <canvas id="minimapCanvas" width="140" height="90"></canvas>
             </div>
           </div>
-          <iframe id="toolFrame" title="Embedded P6 tool"></iframe>
-        </div>
-        <div class="interlocksPanel hidden" id="interlocksPanel">
-          <div class="toolBar">
-            <strong>Interlocks — see inside</strong>
-            <span class="muted">Conditions · inhibits · live Runtime state · canvas highlight</span>
-            <div class="toolBarActions">
-              <button type="button" id="btnIlkRefresh">Refresh</button>
-              <button type="button" id="btnIlkShowMap">Show on map</button>
-              <button type="button" id="btnCloseInterlocks">Back to canvas</button>
+
+          <div class="connectPanel hidden" id="connectPanel">
+            <div class="wsPanelHead">
+              <strong>P6 Connect</strong>
+              <span class="muted">Optional · status only</span>
             </div>
-          </div>
-          <div class="ilkBody">
-            <aside class="ilkListPane">
-              <h4>Model interlocks <span class="muted" id="ilkCount"></span></h4>
-              <p class="warn ilkNote">From OCR/ingest or engineering model. ACTIVE means the trip condition is true in Runtime (sim).</p>
-              <div id="ilkList" class="ilkList"></div>
-            </aside>
-            <section class="ilkDetailPane">
-              <h4 id="ilkDetailTitle">Select an interlock</h4>
-              <p class="muted" id="ilkDetailSub">See the condition chain and what equipment it inhibits — the whole picture after document promote.</p>
-              <div id="ilkDetail" class="ilkDetail"></div>
-            </section>
-          </div>
-        </div>
-        <div class="ingestPanel hidden" id="ingestPanel">
-          <div class="toolBar">
-            <strong>Ingest · Engineering diagram</strong>
-            <span class="muted">STEP 1–3 · extract document · confirm equipment · place on diagram</span>
-            <div class="toolBarActions">
-              <button type="button" id="btnIngestPromote" class="primary" disabled>Add approved equipment to diagram</button>
-              <button type="button" id="btnCloseIngest">Back to canvas</button>
-            </div>
-          </div>
-          <div class="ingestBody">
-            <div class="ingestToolbar">
-              <input type="file" id="ingestFile" accept=".pdf,.png,.jpg,.jpeg,.csv,image/*,application/pdf,text/plain,.txt" />
-              <button type="button" id="btnIngestExtract">Extract</button>
-              <button type="button" id="btnIngestSelectAll">Confirm all</button>
-              <label class="chk"><input type="checkbox" id="ingestApprove" /> Mark approved</label>
-              <label class="chk" title="Hide tags that match bundled demo fixtures (TANK-101, P-101, …)"><input type="checkbox" id="ingestHideDemo" checked /> Hide demo/reference tags</label>
-              <span class="muted" id="ingestMeta">No file yet</span>
-            </div>
-            <p class="warn" id="ingestWarn">
-              Tags stay <b>UNVERIFIED</b> until you confirm. Prefer <b>text / PDF / CSV</b> —
-              scanned image OCR is unfinished and may return empty or low-confidence tags.
-              Promote places confirmed tags on the map and rebinds Runtime.
+            <p class="warn" id="connectLimitWarn">
+              Ignition / OPC live path is <b>optional and unproven</b>. Core Studio + Runtime run without Ignition.
+              Live plant write-back stays gated off.
             </p>
-            <div class="ingestGrid">
-              <section class="ingestPane">
-                <h4>Document metadata</h4>
-                <img id="ingestPreview" alt="" hidden />
-                <pre id="ingestSource" class="mono ingestDocMeta">(Choose a P&amp;ID PDF, drawing image, or equipment list.)</pre>
-              </section>
-              <section class="ingestPane">
-                <h4>Equipment table · confirm tags</h4>
-                <div id="ingestList" class="ingestList ingestTable"></div>
+            <div class="connectCards" id="connectCards"></div>
+            <details class="advDetails connectAdvanced">
+              <summary>Advanced (raw connectivity JSON)</summary>
+              <pre id="connectOut" class="mono"></pre>
+            </details>
+          </div>
+
+          <div class="interlocksPanel hidden" id="interlocksPanel">
+            <div class="wsPanelHead">
+              <strong>Interlocks</strong>
+              <span class="muted">Conditions · inhibits · live Runtime</span>
+              <div class="toolBarActions">
+                <button type="button" id="btnIlkRefresh">Refresh</button>
+                <button type="button" id="btnIlkShowMap">Show on map</button>
+              </div>
+            </div>
+            <div class="ilkBody">
+              <aside class="ilkListPane">
+                <h4>Model interlocks <span class="muted" id="ilkCount"></span></h4>
+                <p class="warn ilkNote">ACTIVE means the trip condition is true in Runtime (sim).</p>
+                <div id="ilkList" class="ilkList"></div>
+              </aside>
+              <section class="ilkDetailPane">
+                <h4 id="ilkDetailTitle">Select an interlock</h4>
+                <p class="muted" id="ilkDetailSub">Condition chain and inhibited equipment — same model as Design / Simulate.</p>
+                <div id="ilkDetail" class="ilkDetail"></div>
               </section>
             </div>
           </div>
+
+          <div class="ioPanel hidden" id="ioPanel">
+            <div class="wsPanelHead">
+              <strong>I/O map</strong>
+              <span class="muted" id="ioMeta">Live Runtime signals</span>
+            </div>
+            <div class="ioBody" id="ioBody">
+              <p class="muted">Loading signals…</p>
+            </div>
+          </div>
+
+          <div class="verifyPanelPanel hidden" id="verifyWorkspacePanel">
+            <div class="wsPanelHead">
+              <strong>P6 Verify</strong>
+              <span class="muted">FAT catalog · assertion evidence</span>
+              <div class="toolBarActions">
+                <button type="button" class="primary" id="btnVerify">Run Test</button>
+              </div>
+            </div>
+            <div class="verifyBody">
+              <div id="verifyCatalog" class="verifyCatalog" data-verify-catalog>
+                <p class="muted">Loading catalog…</p>
+              </div>
+              <div id="verifyWorkspaceLog" class="verifyWorkspaceLog"></div>
+            </div>
+          </div>
+
+          <div class="ingestPanel hidden" id="ingestPanel">
+            <div class="wsPanelHead">
+              <strong>Import · Engineering diagram</strong>
+              <span class="muted">Extract · confirm · place on canvas</span>
+              <div class="toolBarActions">
+                <button type="button" id="btnIngestPromote" class="primary" disabled>Add approved equipment</button>
+                <button type="button" id="btnCloseIngest">Done</button>
+              </div>
+            </div>
+            <div class="ingestBody">
+              <div class="ingestToolbar">
+                <input type="file" id="ingestFile" accept=".pdf,.png,.jpg,.jpeg,.csv,image/*,application/pdf,text/plain,.txt" />
+                <button type="button" id="btnIngestExtract">Extract</button>
+                <button type="button" id="btnIngestSelectAll">Confirm all</button>
+                <label class="chk"><input type="checkbox" id="ingestApprove" /> Mark approved</label>
+                <label class="chk" title="Hide tags that match bundled demo fixtures"><input type="checkbox" id="ingestHideDemo" checked /> Hide demo/reference tags</label>
+                <span class="muted" id="ingestMeta">No file yet</span>
+              </div>
+              <p class="warn" id="ingestWarn">
+                Tags stay <b>UNVERIFIED</b> until you confirm. Prefer <b>text / PDF / CSV</b> —
+                scanned image OCR is unfinished. Promote places confirmed tags on the map and rebinds Runtime.
+              </p>
+              <div class="ingestGrid">
+                <section class="ingestPane">
+                  <h4>Document metadata</h4>
+                  <img id="ingestPreview" alt="" hidden />
+                  <pre id="ingestSource" class="mono ingestDocMeta">(Choose a P&amp;ID PDF, drawing image, or equipment list.)</pre>
+                </section>
+                <section class="ingestPane">
+                  <h4>Equipment table · confirm tags</h4>
+                  <div id="ingestList" class="ingestList ingestTable"></div>
+                </section>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <div class="simBar" id="simBar">
+          <div class="simBarActions runtimeActions">
+            <button type="button" class="primary" data-rt="start">Run</button>
+            <button type="button" data-rt="pause">Pause</button>
+            <button type="button" data-rt="resume">Resume</button>
+            <button type="button" data-rt="stop">Stop</button>
+            <button type="button" data-rt="reset">Reset</button>
+            <label class="chk speedChk">Speed
+              <select id="selSimSpeed" title="Scan interval (virtual time pacing)">
+                <option value="200">0.25×</option>
+                <option value="100">0.5×</option>
+                <option value="50" selected>1×</option>
+                <option value="25">2×</option>
+                <option value="10">5×</option>
+              </select>
+            </label>
+          </div>
+          <span class="muted simBarHint" id="simBarHint">Simulation controls · same Runtime as canvas</span>
+        </div>
+
+        <div class="ctxMenu hidden" id="ctxMenu" role="menu"></div>
       </main>
 
       <aside class="studioInspector" id="inspector">
@@ -296,9 +322,10 @@
         <div class="inspectorTabs" id="inspTabs">
           <button type="button" class="active" data-tab="overview">Overview</button>
           <button type="button" data-tab="control">Control</button>
+          <button type="button" data-tab="logic">Logic</button>
           <button type="button" data-tab="interlocks">Interlocks</button>
-          <button type="button" data-tab="xray">X-Ray</button>
           <button type="button" data-tab="io">I/O</button>
+          <button type="button" data-tab="xray">X-Ray</button>
           <button type="button" data-tab="alarms">Alarms</button>
         </div>
         <div class="inspectorBody" id="inspBody">
@@ -311,8 +338,8 @@
       <div class="wizardPanel">
         <div class="wizardHead">
           <div>
-            <h2 id="wizardTitle">New project wizard</h2>
-            <p class="muted" id="wizardSub">Part 14 — guided setup. Skip incomplete steps when exploring; limitations stay visible.</p>
+            <h2 id="wizardTitle">New project</h2>
+            <p class="muted" id="wizardSub">Scratch setup · skip unfinished steps; limitations stay visible.</p>
           </div>
           <button type="button" id="btnWizardClose" aria-label="Close wizard">×</button>
         </div>
@@ -326,6 +353,20 @@
       </div>
     </div>
 
+    <div class="settingsOverlay hidden" id="settingsOverlay" role="dialog" aria-modal="true">
+      <div class="settingsPanel">
+        <div class="wizardHead">
+          <div>
+            <h2>Settings</h2>
+            <p class="muted">Honesty limits · optional Connect · placeholders</p>
+          </div>
+          <button type="button" id="btnSettingsClose" aria-label="Close">×</button>
+        </div>
+        <ul class="limitsList" id="settingsLimits"></ul>
+        <p class="libHint">Standalone pages (HMI, exports, electrician) remain available outside Studio — not embedded as nested apps.</p>
+      </div>
+    </div>
+
     <footer class="studioConsole collapsed" id="console">
       <div class="consoleBar">
         <div class="activityTabs" role="tablist">
@@ -336,7 +377,7 @@
         </div>
         <div>
           <button type="button" id="btnClearLog">Clear</button>
-          <button type="button" id="btnToggleConsole">Collapse</button>
+          <button type="button" id="btnToggleConsole">Expand</button>
         </div>
       </div>
       <div class="consoleLog" id="consoleLog" data-panel="events"></div>
