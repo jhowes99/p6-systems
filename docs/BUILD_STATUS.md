@@ -1,9 +1,17 @@
 # Build Status
 
-**Last updated:** 2026-10-13  
+**Last updated:** 2026-10-14  
 **Branch:** `p6/phase0-phase1-foundation`  
 
-## Implementation verification (this session) — ✓ executed
+## Docs
+
+- First-time handoff: [GETTING_STARTED.md](./GETTING_STARTED.md) (Demo vs Project, how to run, Studio workflow).
+
+## Engineering plant valve/pump feedback (KI-031) — ✓
+
+`attachEngineeringPlant` always replaces program IR with an empty ladder (no leftover demo IR clearing Q). Plant-owned valve position + every-scan assert of `OpenedFeedback`/`ClosedFeedback`; pump `RunningFeedback` stays true while RunCommand/System.Start && !fault && pathOpen. API smoke: XV-501 open stays true from step 3 onward; P-501 RunningFeedback stays true. Demo `tank_transfer` / `water_transfer` bind unchanged. Evidence: [TEST_RESULTS.md](./TEST_RESULTS.md).
+
+## Implementation verification (prior) — ✓ executed
 
 Rebuilt `p6-app`; reconciled mid-flight edits. Fixed Water Transfer seed restore when `TANK101` renamed (KI-026), model smoke equipment count (10), `level_transmitter`/`flow_transmitter` library entries. Live API workflow: create/edit/persist, Engineer template apply, WT mass balance (source↓ dest↑ flow), FAT pass. Evidence: [TEST_RESULTS.md](./TEST_RESULTS.md).
 
@@ -167,7 +175,8 @@ Inventory: [STUDIO_UX_INVENTORY.md](./STUDIO_UX_INVENTORY.md)
 
 ## Next (recommended)
 
-1. Manual Studio checklist: Design place → Logic interlock → I/O filter by selection → Simulate scenario → Verify FAT (same selection)  
-2. User: set `ACCEPT_IGNITION_EULA=Y` + strong `IGNITION_ADMIN_PASSWORD` in `.env`, recreate `p6-ignition`, finish Gateway commissioning  
-3. Add Tank Transfer FAT when real Runtime assertions exist  
-4. Open PR for `p6/phase0-phase1-foundation` (KI-001)  
+1. Manual Studio Project-mode Simulate: Import → promote → Demo\|Project toggle → open XV / run pump on canvas (API path proven; confirm UI)  
+2. Manual Studio checklist: Design place → Logic interlock → I/O filter by selection → Simulate scenario → Verify FAT (same selection)  
+3. User: set `ACCEPT_IGNITION_EULA=Y` + strong `IGNITION_ADMIN_PASSWORD` in `.env`, recreate `p6-ignition`, finish Gateway commissioning  
+4. Add Tank Transfer FAT when real Runtime assertions exist  
+5. Open PR for `p6/phase0-phase1-foundation` (KI-001)  

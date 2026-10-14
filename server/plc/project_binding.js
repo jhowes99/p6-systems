@@ -62,8 +62,16 @@ export class ProjectRuntimeBridge {
     this.addressToTag.clear();
     this.plc.boundProjectId = project.id;
 
-    // Match ladder + equipment sim to this project (tank vs water transfer)
+    // Match ladder + equipment sim to this project (demo vs imported engineering)
     const plant = attachPlantForProject(this.plc, this.io, project);
+    // Engineering plant may have added signals — persist once so addresses survive reload
+    if (plant.signalsEnsured && (plant.signalsEnsured.addedSignals > 0 || plant.signalsEnsured.addressed > 0)) {
+      try {
+        saveProject(project, { bumpVersion: false });
+      } catch (_) {
+        /* non-fatal */
+      }
+    }
 
     // Temporarily leave strict off so we can declare addresses
     const wasStrict = !!this.io.strict;

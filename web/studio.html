@@ -44,6 +44,10 @@
         <div class="studioProjectMeta" id="projectMeta">—</div>
       </div>
       <div class="studioStatus">
+        <div class="plantModeToggle" id="plantModeToggle" role="group" aria-label="Demo or Project plant">
+          <button type="button" class="plantModeBtn active" data-plant-mode="demo" title="Load the polished sample plant (full valve/pump controls)">Demo</button>
+          <button type="button" class="plantModeBtn" data-plant-mode="project" title="Use your imported / engineering project as the primary plant">Project</button>
+        </div>
         <span class="pill" id="pillMode">MODE</span>
         <span class="pill" id="pillRun">RUNTIME</span>
         <span class="pill" id="pillSim">SIM</span>
@@ -385,15 +389,17 @@
             </label>
           </div>
           <div class="simPlantOps" id="simPlantOps" title="Operator commands for the bound plant (sim only)">
-            <span class="opsLabel">Plant</span>
+            <span class="opsLabel" id="simOpsLabel">Demo plant</span>
+            <button type="button" data-plant="open_valve" title="Open selected / first valve (OpenCommand)">Open valve</button>
+            <button type="button" data-plant="close_valve" title="Close valve">Close valve</button>
             <button type="button" data-plant="clear_high" title="Clear high-level interlock (LSH / LT.High)">Clear LSH</button>
             <button type="button" data-plant="clear_estop" title="Restore E-stop healthy (sim)">Clear E-stop</button>
-            <button type="button" data-plant="reset_trip" title="System.Reset - clear trip latch M1">Reset trip</button>
-            <button type="button" class="accent" data-plant="start_transfer" title="Pulse System.Start - begins transfer when permissives clear">START TRANSFER</button>
+            <button type="button" data-plant="reset_trip" title="System.Reset">Reset trip</button>
+            <button type="button" class="accent" data-plant="start_transfer" title="Start transfer / run pump">START</button>
             <button type="button" class="warn" data-plant="estop" title="Activate E-stop (sim model only)">E-stop</button>
           </div>
           <span class="simBindWarn" id="simBindWarn" hidden></span>
-          <span class="muted simBarHint" id="simBarHint">Clear LSH → START TRANSFER · sim only</span>
+          <span class="muted simBarHint" id="simBarHint">Demo: Clear LSH → START · Project: Open valve → START</span>
         </div>
 
         <div class="ctxMenu hidden" id="ctxMenu" role="menu"></div>
@@ -500,6 +506,6 @@
   <script src="verify_ui.js?v=20261014a"></script>
   <script src="symbols/svg.js?v=20261014a"></script>
   <script src="symbols/registry.js?v=20261014a"></script>
-  <script src="studio.js?v=20261014c"></script>
+  <script src="studio.js?v=20261014d"></script>
 </body>
 </html>

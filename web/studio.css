@@ -1147,6 +1147,34 @@ svg.links path.linkInvalid {
 .studioStatusBar.collapsed,
 .studioConsole.collapsed { height: var(--console-h); }
 .studioStatusBar:not(.collapsed) { height: calc(var(--console-h) + var(--status-expand-h)); }
+.plantModeToggle {
+  display: inline-flex;
+  border: 1px solid var(--p6-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 0.35rem;
+}
+.plantModeBtn {
+  border: 0;
+  background: transparent;
+  color: var(--p6-muted, #8ba3b8);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+}
+.plantModeBtn.active {
+  background: rgba(40, 197, 255, 0.18);
+  color: var(--p6-cyan, #28c5ff);
+}
+.plantModeBtn:hover:not(.active) {
+  color: var(--p6-ink, #e8f1f8);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .studioStatusBar.collapsed .statusBarExpand { display: none !important; }
 .studioConsole.collapsed .consoleLog,
 .studioConsole.collapsed .timelinePanel { display: none !important; }

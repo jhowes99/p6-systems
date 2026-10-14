@@ -15,6 +15,7 @@
   const selectedIds = new Set();
   let lastCanvas = null;
   let projectId = null;
+  let activeProjectMeta = null;
   let inspTab = "overview";
   let lastEventIds = new Set();
   let layoutDirty = false;
@@ -43,6 +44,8 @@
   let selectedLinkId = null;
   let workspaceMode = "engineering"; // engineering | simulation | diagnostic (canvas behavior)
   let workspace = "design"; // design | engineer | simulate | verify
+  /** demo = polished sample plant; project = imported/engineering primary */
+  let plantMode = localStorage.getItem("p6.studio.plantMode") || "demo";
   /** P&ID schematic vs SCADA status — same equipment model */
   let symbolMode = "pid"; // pid | scada
   let showPorts = true;
@@ -870,9 +873,11 @@
     const p = d.project;
     if (!p) throw new Error("No active project");
     projectId = p.id;
+    activeProjectMeta = p.meta || null;
+    const modeLabel = p.meta?.samplePlant ? "demo sample" : p.meta?.workspaceMode === "project" ? "project" : "plant";
     document.getElementById("projectName").textContent = p.name || "Untitled";
     document.getElementById("projectMeta").textContent =
-      `id=${p.id} · model v${p.modelVersion} · schema v${p.schemaVersion ?? "—"} · layout ${p.ui?.graph?.updatedAt ? "saved" : "default"}`;
+      `id=${p.id} · model v${p.modelVersion} · ${modeLabel} · layout ${p.ui?.graph?.updatedAt ? "saved" : "default"}`;
     await refreshModelValidation();
   }
 
@@ -2551,7 +2556,11 @@
       cmds.push({ label: "Show start / Start transfer", tag: "System.Start", pulse: true });
       cmds.push({ label: "Reset trip", tag: "System.Reset", pulse: true });
       const run = tags.find((t) => /RunCommand/i.test(t));
-      if (run) cmds.push({ label: "Run command", tag: run, pulse: true });
+      // Hold RunCommand (do not pulse) — engineering/demo pumps need steady run for RunningFeedback
+      if (run) {
+        cmds.push({ label: "Run", tag: run, value: true });
+        cmds.push({ label: "Stop", tag: run, value: false });
+      }
     }
     if (/valve/i.test(node.type)) {
       const open = tags.find((t) => /OpenCommand/i.test(t));
@@ -3264,19 +3273,102 @@
     document.getElementById("console")?.classList.remove("collapsed");
   }
 
-  /** Resolve live tags for tank-transfer OR water-transfer demos. */
+  /** Resolve live tags for demos OR imported engineering plants. */
   async function resolvePlantTags() {
     const d = await api("/api/runtime/signals");
     const tags = (d.signals || []).map((s) => s.tag);
-    const pick = (...cands) => cands.find((t) => tags.includes(t)) || cands[0];
+    const pick = (...cands) => cands.find((t) => tags.includes(t)) || null;
+    const first = (re) => tags.find((t) => re.test(t)) || null;
+    // Prefer selected equipment's commands when in Project mode
+    let valveOpen = pick("XV101.OpenCommand", "VALVE-101.OpenCommand", "XV-101.OpenCommand");
+    let pumpRun = pick("P101.RunCommand", "PUMP-101.RunCommand", "P-101.RunCommand");
+    if (selected?.tag) {
+      const v = `${selected.tag}.OpenCommand`;
+      const p = `${selected.tag}.RunCommand`;
+      if (tags.includes(v)) valveOpen = v;
+      if (tags.includes(p)) pumpRun = p;
+    }
+    if (!valveOpen) valveOpen = first(/\.OpenCommand$/i);
+    if (!pumpRun) pumpRun = first(/\.RunCommand$/i) || first(/PUMP.*\.RunCommand$/i);
     return {
       tags,
-      estop: pick("ESTOP101.Healthy", "ESD-101.Healthy", "ESD101.Healthy"),
-      high: pick("LSH101.High", "LT-101.High", "LSH-101.High"),
-      valveOpen: pick("XV101.OpenCommand", "VALVE-101.OpenCommand", "XV-101.OpenCommand"),
-      start: "System.Start",
-      reset: "System.Reset"
+      plantMode,
+      estop: pick("ESTOP101.Healthy", "ESD-101.Healthy", "ESD101.Healthy") || first(/\.Healthy$/i),
+      high: pick("LSH101.High", "LT-101.High", "LSH-101.High") || first(/\.High$/i),
+      valveOpen,
+      pumpRun,
+      // Only System.Start is a pulse; pump RunCommand must be held for RunningFeedback
+      start: tags.includes("System.Start") ? "System.Start" : null,
+      reset: tags.includes("System.Reset") ? "System.Reset" : null
     };
+  }
+
+  function syncPlantModeUi() {
+    document.querySelectorAll("[data-plant-mode]").forEach((b) => {
+      b.classList.toggle("active", b.getAttribute("data-plant-mode") === plantMode);
+    });
+    const label = document.getElementById("simOpsLabel");
+    if (label) label.textContent = plantMode === "demo" ? "Demo plant" : "Project plant";
+    const hint = document.getElementById("simBarHint");
+    if (hint) {
+      hint.textContent =
+        plantMode === "demo"
+          ? "Demo: Clear LSH → START · sample plant only"
+          : "Project: Open valve → START · commands your imported equipment";
+    }
+  }
+
+  /**
+   * Demo = polished sample (Tank Transfer). Project = last non-sample engineering project.
+   */
+  async function setPlantMode(mode, { silent = false } = {}) {
+    const next = mode === "project" ? "project" : "demo";
+    plantMode = next;
+    localStorage.setItem("p6.studio.plantMode", next);
+    syncPlantModeUi();
+
+    if (next === "demo") {
+      const seeded = await api("/api/model/projects/seed/tank-transfer-demo", { method: "POST", body: "{}" });
+      const id = seeded.project?.id;
+      if (id) {
+        await api("/api/model/projects/active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: id })
+        });
+        projectId = id;
+      }
+      if (!silent) logEvent("Plant mode: Demo — sample Tank Transfer (full controls)", "ok");
+    } else {
+      const list = await api("/api/model/projects");
+      const projects = list.projects || list || [];
+      const eng =
+        projects.find((p) => p.id === projectId && !p.meta?.samplePlant) ||
+        projects.find((p) => p.meta?.workspaceMode === "project" || p.meta?.plantTemplate === "engineering") ||
+        projects.find((p) => !p.meta?.samplePlant && !/demo|water transfer/i.test(p.name || ""));
+      if (!eng) {
+        if (!silent) {
+          logEvent(
+            "No Project plant yet — Import a drawing (Design → Import) to create one. Demo stays available.",
+            "alarm"
+          );
+        }
+        syncPlantModeUi();
+        return;
+      }
+      await api("/api/model/projects/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: eng.id })
+      });
+      projectId = eng.id;
+      if (!silent) logEvent(`Plant mode: Project — ${eng.name} (imported engineering is primary)`, "ok");
+    }
+    await refreshProject();
+    await syncRuntime(`plant mode ${next}`);
+    await refreshCanvas();
+    fitViewSoon(2, { force: true });
+    setWorkspace("simulate");
   }
 
   async function runScenario(name) {
@@ -3334,26 +3426,52 @@
     try {
       await syncRuntime("plant op").catch(() => {});
       const plant = await resolvePlantTags();
-      if (op === "clear_high") {
+      if (op === "open_valve") {
+        if (!plant.valveOpen) throw new Error("No valve OpenCommand on this plant — select a valve or import one");
+        await sendCommand(plant.valveOpen, true);
+        logEvent(`Valve open commanded (${plant.valveOpen})`, "ok");
+      } else if (op === "close_valve") {
+        if (!plant.valveOpen) throw new Error("No valve OpenCommand on this plant");
+        await sendCommand(plant.valveOpen, false);
+        logEvent(`Valve close commanded (${plant.valveOpen})`, "ok");
+      } else if (op === "clear_high") {
+        if (!plant.high) throw new Error("No high-level signal on this plant");
         await sendCommand(plant.high, false);
         logEvent(`Cleared high-level (${plant.high})`, "ok");
       } else if (op === "clear_estop") {
-        await sendCommand(plant.estop, true);
-        await sendCommand(plant.reset, true, true);
-        logEvent(`E-stop cleared (${plant.estop}) + reset`, "ok");
+        if (plant.estop) await sendCommand(plant.estop, true);
+        if (plant.reset) await sendCommand(plant.reset, true, true);
+        logEvent(`E-stop cleared${plant.estop ? ` (${plant.estop})` : ""}`, "ok");
       } else if (op === "reset_trip") {
+        if (!plant.reset) throw new Error("No System.Reset on this plant");
         await sendCommand(plant.reset, true, true);
         logEvent("Trip reset pulsed (System.Reset)", "ok");
       } else if (op === "start_transfer") {
-        await sendCommand(plant.high, false);
-        await sendCommand(plant.estop, true);
-        if (/VALVE-101|XV-101/i.test(plant.valveOpen) && !/XV101\.OpenCommand/i.test(plant.valveOpen)) {
-          await sendCommand(plant.valveOpen, true);
-          await new Promise((r) => setTimeout(r, 350));
+        if (plant.high) await sendCommand(plant.high, false);
+        if (plant.estop) await sendCommand(plant.estop, true);
+        // Project / tank demo: open valve first; water-transfer Start opens valve itself
+        if (plant.valveOpen && (plantMode === "project" || /VALVE-101|XV-101/i.test(plant.valveOpen))) {
+          if (!/XV101\.OpenCommand/i.test(plant.valveOpen)) {
+            await sendCommand(plant.valveOpen, true);
+            await new Promise((r) => setTimeout(r, 400));
+          }
         }
-        await sendCommand(plant.start, true, true);
-        logEvent("START TRANSFER pulsed — watch valve/pump on canvas", "ok");
+        // Project: hold RunCommand (engineering plant also latches System.Start → RunCommand).
+        // Demo: prefer System.Start pulse when present.
+        if (plantMode === "project" && plant.pumpRun) {
+          await sendCommand(plant.pumpRun, true);
+          logEvent(`START — pump RunCommand held (${plant.pumpRun})`, "ok");
+        } else if (plant.start) {
+          await sendCommand(plant.start, true, true);
+          logEvent("START pulsed — watch valve/pump on canvas", "ok");
+        } else if (plant.pumpRun) {
+          await sendCommand(plant.pumpRun, true);
+          logEvent(`START — pump RunCommand held (${plant.pumpRun})`, "ok");
+        } else {
+          throw new Error("No System.Start or pump RunCommand — import pump/valve signals first");
+        }
       } else if (op === "estop") {
+        if (!plant.estop) throw new Error("No E-stop Healthy signal on this plant");
         await sendCommand(plant.estop, false);
         logEvent("E-stop activated (sim only — not a certified physical safety function)", "alarm");
       }
@@ -3519,6 +3637,10 @@
   document.querySelectorAll("[data-plant]").forEach((el) => {
     el.addEventListener("click", () => runPlantOp(el.getAttribute("data-plant")));
   });
+  document.querySelectorAll("[data-plant-mode]").forEach((el) => {
+    el.addEventListener("click", () => setPlantMode(el.getAttribute("data-plant-mode")));
+  });
+  syncPlantModeUi();
   document.getElementById("navImportPid")?.addEventListener("click", () => setWorkspace("design", { openIngest: true }));
   document.getElementById("navScratch")?.addEventListener("click", () => openWizard(1));
   document.getElementById("navOpenExisting")?.addEventListener("click", () => {
@@ -4572,10 +4694,16 @@
         "ok"
       );
       closeIngestPanel();
-      setWorkspace("design");
+      // Imported model becomes primary — leave Demo sample untouched
+      plantMode = "project";
+      localStorage.setItem("p6.studio.plantMode", "project");
+      syncPlantModeUi();
       await refreshProject();
+      await syncRuntime("ingest promote → project plant");
       await refreshCanvas();
       fitView();
+      setWorkspace("simulate");
+      logEvent("Switched to Project plant — Open valve → START on Simulate. Toggle Demo anytime to return to the sample.", "ok");
       activeWorkflow = "configure";
     } catch (e) {
       logEvent("Promote failed: " + e.message, "alarm");
@@ -5077,6 +5205,15 @@
     setWorkspace(initialWs);
     await refreshProject();
     await refreshProjectList();
+    // demo=1 URL forces sample plant; otherwise honor Demo|Project toggle / project meta
+    if (params.get("demo") === "1") {
+      plantMode = "demo";
+      localStorage.setItem("p6.studio.plantMode", "demo");
+    } else if (activeProjectMeta?.workspaceMode === "project" || activeProjectMeta?.plantTemplate === "engineering") {
+      plantMode = "project";
+      localStorage.setItem("p6.studio.plantMode", "project");
+    }
+    syncPlantModeUi();
     // Always bind Runtime to the active Studio project (fixes Water Transfer canvas vs Tank Transfer PLC mismatch)
     await syncRuntime("boot").catch((e) => logEvent(`Boot bind: ${e.message}`, "alarm"));
     await refreshStatus();
@@ -5086,7 +5223,10 @@
     await refreshIlkCorners();
     updateStatusChips();
     fitViewSoon(4, { force: true });
-    logEvent("P6 Studio ready — Design · Engineer · Simulate · Verify & Export · same model across views", "ok");
+    logEvent(
+      `P6 Studio ready — plant mode: ${plantMode === "demo" ? "Demo (sample)" : "Project (imported)"} · Design · Engineer · Simulate · Verify`,
+      "ok"
+    );
     if (params.get("demo") === "1") {
       await api("/api/runtime/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       logEvent("Sample plant: runtime started", "ok");

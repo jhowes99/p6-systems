@@ -1,6 +1,6 @@
 # Known Issues
 
-**Last updated:** 2026-10-13 (implementation verification)
+**Last updated:** 2026-10-14 (engineering plant feedback)
 
 ## Blockers / high
 
@@ -43,3 +43,4 @@
 | KI-024 | Studio edit friction after UX refactor | Closed |
 | KI-025 | Water Transfer won't energize / X-Ray false high-level | Closed — plant template rebind + Clear LSH / START TRANSFER |
 | KI-030 | `/api/readiness` `readyForDemo` false on Tank Transfer active | Expected — `water_transfer_ir` check fails when plant IR is `tank_transfer`. Not a Runtime defect |
+| KI-031 | Engineering plant OpenedFeedback flickered (demo ladder IR cleared Q each scan) | Closed — always empty IR on attach; assert open/close every scan from plant-owned state; pump RunningFeedback holds while pathOpen |

@@ -19,6 +19,7 @@ import {
 import { loadProject, saveProject, getActiveProject, createProject } from "./store.js";
 import { attachLastValidation } from "./validate.js";
 import { retainDocumentFile } from "./ingest_documents.js";
+import { ensureEngineeringSignals } from "../plc/equipment/engineering_plant.js";
 
 /** Draft interlocks from ingested safety/level tags so Studio can show the inside after OCR promote. */
 function inferDraftInterlocks(project, createdEquipment, dataClass) {
@@ -421,6 +422,15 @@ export function promoteExtractions(body = {}) {
     };
   }
 
+  // Imported engineering becomes the primary plant (not the sample demo)
+  project.meta = {
+    ...(project.meta || {}),
+    samplePlant: false,
+    workspaceMode: "project",
+    plantTemplate: "engineering"
+  };
+  ensureEngineeringSignals(project);
+
   attachLastValidation(project);
   project = saveProject(project, { bumpVersion: true });
   return {
@@ -434,6 +444,7 @@ export function promoteExtractions(body = {}) {
     note:
       "Candidates remain ENGINEERING_INFERENCE until approved unless approveAll was set. " +
       "Ambiguous connections require explicit include. " +
-      "Draft interlocks from ESD/level tags are inference-only — open Studio Interlocks to review."
+      "Draft interlocks from ESD/level tags are inference-only — open Studio Interlocks to review. " +
+      "Project mode: Runtime binds the engineering plant so valves/pumps can be commanded in Simulate."
   };
 }

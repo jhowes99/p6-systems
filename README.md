@@ -1,6 +1,12 @@
 # P6 Systems
 
-Industrial engineering, simulation, and virtual commissioning platform (**P6 Studio**, **P6 Runtime**, **P6 Verify**, **P6 Connect**).
+**P6 Systems** — Industrial Engineering, Simulation and Virtual Commissioning Platform.
+
+Surfaces: **P6 Studio** · **P6 Runtime** · **P6 Connect** (Ignition optional) · **P6 Verify**.
+
+**First-time handoff:** [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — what it is, how to run (Docker core), Demo vs Project, and the import → Simulate workflow.
+
+---
 
 A local virtual PLC runtime with:
 - **P&ID Import** - Automatically generate PLC code from P&ID documents (perfect for non-PLC users!)
