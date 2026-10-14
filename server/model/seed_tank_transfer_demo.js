@@ -31,6 +31,86 @@ import {
 export const TANK_TRANSFER_DEMO_NAME = "P6 Demo — Tank Transfer System";
 export const TANK_TRANSFER_DEMO_SLUG = "p6-demo-tank-transfer";
 
+/** Canonical §40 demo tags — E2E ingest leaves ESD-E2E-* / PUMP-201 extras otherwise. */
+export const TANK_TRANSFER_CANONICAL_TAGS = Object.freeze([
+  "TANK-101",
+  "TANK-102",
+  "PUMP-101",
+  "M-101",
+  "VALVE-101",
+  "LT-101",
+  "ESD-101"
+]);
+
+/**
+ * Strip non-canonical equipment (and orphans) from the Tank Transfer demo.
+ * Persists across reboots via project.json — without this, Studio Simulate fills with junk rows.
+ */
+export function pruneTankTransferExtras(project) {
+  if (!project || project.name !== TANK_TRANSFER_DEMO_NAME) {
+    return { project, pruned: false, removedTags: [] };
+  }
+  const keepTags = new Set(TANK_TRANSFER_CANONICAL_TAGS);
+  const keepIds = new Set();
+  const removedTags = [];
+
+  project.equipment = (project.equipment || []).filter((e) => {
+    if (keepTags.has(e.tag)) {
+      keepIds.add(e.id);
+      return true;
+    }
+    removedTags.push(e.tag);
+    return false;
+  });
+
+  project.instruments = (project.instruments || []).filter(
+    (inst) => (inst.equipmentId && keepIds.has(inst.equipmentId)) || keepTags.has(inst.tag)
+  );
+  project.signals = (project.signals || []).filter((s) => {
+    if (s.equipmentId && keepIds.has(s.equipmentId)) return true;
+    const root = String(s.tag || "").split(".")[0];
+    return keepTags.has(root);
+  });
+  project.connections = (project.connections || []).filter(
+    (c) => keepIds.has(c.fromEquipmentId) && keepIds.has(c.toEquipmentId)
+  );
+  project.interlocks = (project.interlocks || []).filter((ilk) => {
+    const inhibits = ilk.inhibitsEquipmentIds || [];
+    if (inhibits.length) {
+      ilk.inhibitsEquipmentIds = inhibits.filter((id) => keepIds.has(id));
+      return ilk.inhibitsEquipmentIds.length > 0;
+    }
+    return (ilk.conditionSignalIds || []).some((sid) =>
+      (project.signals || []).some((s) => s.id === sid)
+    );
+  });
+
+  // Restore §40 P&ID coordinates whenever we prune (auto-layout dumps survivors into a grid)
+  const byTag = Object.fromEntries((project.equipment || []).map((e) => [e.tag, e]));
+  const layout = {};
+  const place = (tag, box) => {
+    const e = byTag[tag];
+    if (e) layout[e.id] = box;
+  };
+  place("TANK-101", { x: 60, y: 160, w: 160, h: 100 });
+  place("PUMP-101", { x: 320, y: 180, w: 140, h: 80 });
+  place("M-101", { x: 320, y: 320, w: 120, h: 70 });
+  place("VALVE-101", { x: 560, y: 180, w: 120, h: 80 });
+  place("TANK-102", { x: 800, y: 160, w: 160, h: 100 });
+  place("LT-101", { x: 800, y: 40, w: 120, h: 70 });
+  place("ESD-101", { x: 560, y: 40, w: 120, h: 70 });
+  project.ui = project.ui || {};
+  project.ui.graph = { nodes: layout, updatedAt: new Date().toISOString() };
+
+  project.meta = {
+    ...(project.meta || {}),
+    demoPruneVersion: 2,
+    lastDemoPruneAt: new Date().toISOString(),
+    lastDemoPruneRemoved: removedTags
+  };
+  return { project, pruned: true, removedTags };
+}
+
 function eq(projectId, tag, type, description, states, initialState, properties = {}) {
   const e = createEquipment({
     projectId,
@@ -56,8 +136,17 @@ function isCurrentDemo(project) {
 export function ensureTankTransferDemoProject() {
   const existing = listProjects().find((p) => p.name === TANK_TRANSFER_DEMO_NAME);
   if (existing) {
-    const full = loadProject(existing.id);
+    let full = loadProject(existing.id);
     if (isCurrentDemo(full)) {
+      const needsPrune =
+        full.meta?.demoPruneVersion !== 2 ||
+        (full.equipment || []).some((e) => !TANK_TRANSFER_CANONICAL_TAGS.includes(e.tag));
+      if (needsPrune) {
+        const { project: cleaned, pruned } = pruneTankTransferExtras(full);
+        full = saveProject(cleaned, { bumpVersion: false });
+        setActiveProject(full.id);
+        return { project: full, created: false, upgraded: !!pruned };
+      }
       setActiveProject(full.id);
       return { project: full, created: false, upgraded: false };
     }

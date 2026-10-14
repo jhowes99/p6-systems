@@ -1,8 +1,10 @@
 # Test Results
 
-**Last updated:** 2026-10-12
+**Last updated:** 2026-10-13 (implementation verification session)  
+**Branch:** `p6/phase0-phase1-foundation`  
+**Environment:** `docker compose -f compose.yaml --profile core up --build -d p6-app` then host `node` smokes against `http://127.0.0.1:3000`
 
-## Regression harness
+## Regression harness (executed)
 
 ```bash
 docker compose -f compose.yaml --profile core up --build -d p6-app
@@ -13,59 +15,53 @@ node scripts/regression_all.mjs
 |-------|--------|
 | model | PASS |
 | cem2 | PASS |
+| engineer | PASS |
 | runtime | PASS |
-| water_transfer | PASS |
+| water_transfer | PASS (incl. massBalance / levelTransfer) |
 | tank_transfer | PASS |
 | xray | PASS |
 | history | PASS |
 | fat_estop | PASS |
-| ocr | PASS (incl. `tagOrigin` demo_reference) |
+| verify_phase6 | PASS (6 executable FAT pass, 1 BLOCKED honest) |
+| ocr | PASS |
 | ignition_udt | PASS |
-| studio_e2e | PASS (**26/26**) |
-| **Total** | **11/11 PASS** |
+| studio_e2e | PASS (**32/32**) |
+| **Total** | **13/13 PASS** |
 
-**Verified 2026-10-12 (Studio UX architecture refactor):** `docker compose … up --build -d p6-app` then `regression_all.mjs` — **11/11 PASS**, studio_e2e **26/26**. New markers: five workspace tabs, no `toolFrame` / “Open full page”, native interlocks + I/O + verify catalog, landing Import/Scratch CTAs.
+## Ad-hoc workflow smoke (executed this session)
 
-**Prior (post CEM D / write-validation):** model-first X-Ray, impact `verifyCatalogRefs`, non-blocking `lastValidation` on writes.
+API workflow against live `p6-app`:
 
-**Ignition live attempt (same session):**
-
-| Probe | Result |
+| Check | Result |
 |-------|--------|
-| `GET /api/connect/opcua` | PASS — `running:true`, `nodeCount:23`, `opc.tcp://localhost:4840/UA/P6Systems` |
-| `docker compose --profile ignition up -d ignition` | Container started (image 8.3.9) |
-| Gateway logs | `needs_commissioning: eula` |
-| `.env` | `ACCEPT_IGNITION_EULA=N`, `IGNITION_ADMIN_PASSWORD` empty |
-| Ignition OPC client ↔ P6 tag read/write | **NOT PROVEN** |
+| Create project + add/edit equipment + graph PATCH persist + reopen | PASS |
+| Engineer `POST /api/engineer/.../templates/apply` | PASS |
+| Water Transfer bind + Clear LSH + System.Start energize | PASS |
+| Mass balance (API polls) | PASS — `TANK101` 65→64.10, `TANK102` 15→15.90, `FT101.FlowGpm`≈1676 (demo-accelerated, calculated) |
+| Canvas nodes live-bound to engineering tags | PASS |
+| FAT `P101_ESTOP_SHUTDOWN` via `/api/verify/run` | PASS (4 assertions) |
+| Ingest promote path | PASS |
 
-See KI-019. Core regression remains independent of Ignition.
-
-## Studio E2E highlights
+## Studio E2E highlights (32/32)
 
 | Check | Result |
 |-------|--------|
 | §40 Tank Transfer demo | PASS |
-| X-Ray Phase 1 payload + stuck-valve fault | PASS |
-| Verify catalog + `limits[]` + FAT run | PASS |
-| `/api/runtime/logic` observability | PASS |
-| `verify.html` / `connect.html` UX markers | PASS |
-| Ingest promote / interlocks / knownLimits | PASS |
-| Five-workspace Studio shell (no nested iframe) | PASS |
-| Landing Import / Scratch / Open CTAs | PASS |
-
-### Manual checklist (Studio UX)
-
-- [ ] Design: drag library equipment, connect, Import P&ID promote  
-- [ ] Logic: interlocks list + detail; selection highlights equipment  
-- [ ] I/O: signals table filters to selected equipment  
-- [ ] Simulate: Run/Pause/Speed + scenario; X-Ray on selection  
-- [ ] Verify: catalog Run Test → assertion rows; Events drawer  
-- [ ] Switch workspaces without losing selection / project  
+| Four-workspace shell (Design / Engineer / Simulate / Verify) | PASS |
+| Symbol registry + pid/scada mode markers | PASS |
+| Water Transfer Phase 2 diagram + ports | PASS |
+| Water Transfer bind+start + process physics + fault injection | PASS |
+| FAT catalog limits + run | PASS |
+| Vision/OCR ingest pipeline + promote | PASS |
+| Vision: source refs, connection include/skip, gaps, wizard markers | PASS (`smoke_ocr` + e2e this session) |
 
 ## Honest limits
 
 - E2E assumes p6-app reachable at `http://127.0.0.1:3000`; skips if down  
-- Stale container images omit new fields — rebuild before claiming milestones  
+- Stale container images omit new routes — rebuild before claiming milestones  
+- `/api/readiness` `readyForDemo=false` while active plant IR is `tank_transfer` (`water_transfer_ir` check fails by design)  
 - Simulated E-stop / faults — not certified physical safety  
-- Verify still one automated FAT until Tank Transfer assertions are implemented  
-- Control-sequence authoring UI unfinished (Logic sidebar labels it)  
+- `P101_MOTOR_FAULT_ALARM` remains **BLOCKED** (no Runtime fault/alarm path yet)  
+- Ignition live tag bind still **not proven** (KI-019)  
+- Control-sequence authoring UI unfinished (KI-023)  
+- Scanned image OCR unfinished (KI-003) — prefer text/PDF/SVG/CSV; Manual reconstruct path available  

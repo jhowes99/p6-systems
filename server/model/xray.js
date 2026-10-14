@@ -22,8 +22,22 @@ function sigVal(signals, ...tags) {
   return null;
 }
 
+/** Prefer tags that exist on the project model so a mismatched Runtime cannot pick foreign demo tags. */
+function sigValPreferProject(project, signals, ...tags) {
+  const projectTags = new Set((project?.signals || []).map((s) => s.tag));
+  const preferred = tags.filter((t) => projectTags.has(t));
+  const order = preferred.length ? [...preferred, ...tags.filter((t) => !projectTags.has(t))] : tags;
+  return sigVal(signals, ...order);
+}
+
 function findByRe(signals, re) {
   return (signals || []).find((s) => re.test(s.tag)) || null;
+}
+
+function findByRePreferProject(project, signals, re) {
+  const projectTags = new Set((project?.signals || []).map((s) => s.tag));
+  const inProject = (signals || []).find((s) => projectTags.has(s.tag) && re.test(s.tag));
+  return inProject || findByRe(signals, re);
 }
 
 /** Real Verify catalog entries that may apply (ids/names only — no fake results). */
@@ -286,30 +300,32 @@ export function analyzeEquipmentXRay({ projectId, equipmentId, equipmentTag, sig
   const roleSigs = findRoleSignals(project, equipment.id, signals);
   const esd =
     roleSigs.esd ||
-    sigVal(signals, "ESD-101.Healthy", "ESTOP101.Healthy") ||
-    findByRe(signals, /ESD|ESTOP.*Healthy/i);
+    sigValPreferProject(project, signals, "ESTOP101.Healthy", "ESD-101.Healthy") ||
+    findByRePreferProject(project, signals, /ESD|ESTOP.*Healthy/i);
   const high =
     roleSigs.level_high ||
-    sigVal(signals, "LT-101.High", "LT-102.High", "LSH101.High") ||
-    findByRe(signals, /High$/i);
+    sigValPreferProject(project, signals, "LSH101.High", "LT-101.High", "LT-102.High") ||
+    findByRePreferProject(project, signals, /High$/i);
   const valveOpen =
     roleSigs.valve_open ||
-    sigVal(signals, "VALVE-101.OpenedFeedback", "XV-101.OpenedFeedback", "XV101.OpenedFeedback") ||
-    findByRe(signals, /VALVE-?101\.Opened|XV-?101\.Opened/i);
+    sigValPreferProject(project, signals, "XV101.OpenedFeedback", "XV-101.OpenedFeedback", "VALVE-101.OpenedFeedback") ||
+    findByRePreferProject(project, signals, /VALVE-?101\.Opened|XV-?101\.Opened/i);
   const valveCmd =
     roleSigs.valve_cmd ||
-    sigVal(signals, "VALVE-101.OpenCommand", "XV-101.OpenCommand") ||
-    findByRe(signals, /VALVE-?101\.OpenCommand|XV-?101\.OpenCommand/i);
+    sigValPreferProject(project, signals, "XV101.OpenCommand", "XV-101.OpenCommand", "VALVE-101.OpenCommand") ||
+    findByRePreferProject(project, signals, /VALVE-?101\.OpenCommand|XV-?101\.OpenCommand/i);
   const running =
     roleSigs.running ||
-    sigVal(signals, "PUMP-101.RunningFeedback", "P-101.RunningFeedback", "P101.RunningFeedback") ||
-    findByRe(signals, /RunningFeedback/i);
+    sigValPreferProject(project, signals, "P101.RunningFeedback", "P-101.RunningFeedback", "PUMP-101.RunningFeedback") ||
+    findByRePreferProject(project, signals, /RunningFeedback/i);
   const motor =
     roleSigs.motor ||
-    sigVal(signals, "M-101.Energize", "M101.Energize") ||
-    findByRe(signals, /Energize/i);
+    sigValPreferProject(project, signals, "M101.Energize", "M-101.Energize") ||
+    findByRePreferProject(project, signals, /Energize/i);
   const flow =
-    roleSigs.flow || sigVal(signals, "FIT-101.FlowGpm") || findByRe(signals, /FlowGpm|Flow/i);
+    roleSigs.flow ||
+    sigValPreferProject(project, signals, "FIT-101.FlowGpm") ||
+    findByRePreferProject(project, signals, /FlowGpm|Flow/i);
 
   function rootForSignal(sig) {
     if (!sig) return { equipmentId: null, equipmentTag: null };

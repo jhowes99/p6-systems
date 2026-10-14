@@ -12,6 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const jobs = [
   { name: "model", cmd: "node", args: ["server/model/smoke_test.js"] },
   { name: "cem2", cmd: "node", args: ["server/model/smoke_test_cem2.js"] },
+  { name: "engineer", cmd: "node", args: ["server/engineer/smoke_test_engineer.js"] },
   { name: "runtime", cmd: "node", args: ["server/plc/smoke_test_runtime.js"] },
   { name: "water_transfer", cmd: "node", args: ["server/plc/equipment/smoke_test_water_transfer.js"] },
   { name: "tank_transfer", cmd: "node", args: ["server/plc/equipment/smoke_test_tank_transfer.js"] },
@@ -26,6 +27,7 @@ const jobs = [
       "import { runFatTest } from './server/verify/fat_runner.js'; const r=await runFatTest(); if(!r.pass) process.exit(1); console.log('FAT PASS');"
     ]
   },
+  { name: "verify_phase6", cmd: "node", args: ["scripts/smoke_verify_phase6.mjs"] },
   { name: "ocr", cmd: "node", args: ["scripts/smoke_ocr.mjs"] },
   { name: "ignition_udt", cmd: "node", args: ["scripts/smoke_ignition_udt.mjs"] },
   { name: "studio_e2e", cmd: "node", args: ["scripts/smoke_studio_e2e.mjs"] }

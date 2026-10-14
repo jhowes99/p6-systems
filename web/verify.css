@@ -1,3 +1,7 @@
+/* P6 Verify — dark cards aligned with app_shell / Studio tokens */
+.verifyPage {
+  color: var(--p6-ink, #e8f0f7);
+}
 .verifyPage .verifyCatalog {
   display: flex;
   flex-direction: column;
@@ -5,14 +9,29 @@
   margin: 1rem 0;
 }
 .verifyPage .verifyTestCard {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--p6-border, rgba(40, 197, 255, 0.14));
   border-radius: 10px;
   padding: 0.85rem 1rem;
-  background: #fff;
+  background: var(--p6-panel, #12263d);
+  color: var(--p6-ink, #e8f0f7);
 }
 .verifyPage .verifyTestCard h3 {
   margin: 0 0 0.35rem;
   font-size: 1rem;
+  color: var(--p6-ink, #e8f0f7);
+}
+.verifyPage .verifyTestCard .small,
+.verifyPage .verifyTestCard .muted {
+  color: var(--p6-muted, #8aa0b5);
+}
+.verifyPage .verifyTestCard code {
+  font-family: var(--p6-mono, ui-monospace, monospace);
+  color: var(--p6-cyan, #28C5FF);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--p6-border, rgba(40, 197, 255, 0.14));
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85em;
 }
 .verifyPage .verifyTestCard .actions {
   display: flex;
@@ -23,27 +42,37 @@
 .verifyPage .verifyResults {
   margin-top: 1.25rem;
 }
+.verifyPage .verifyResults h2 {
+  color: var(--p6-ink, #e8f0f7);
+}
 .verifyRow {
   padding: 0.55rem 0.4rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--p6-border, rgba(40, 197, 255, 0.14));
   font-size: 0.85rem;
+  color: var(--p6-ink, #e8f0f7);
 }
 .verifyHead { margin-bottom: 0.25rem; }
+.verifyHead b { color: var(--p6-ink, #e8f0f7); }
 .verifyAssert {
   list-style: none;
   margin: 0.35rem 0 0;
   padding: 0;
   font-size: 0.82rem;
 }
-.verifyAssert .ok { color: #166534; }
-.verifyAssert .alarm { color: #b91c1c; }
-.verifyRow.ok { border-left: 3px solid #22c55e; padding-left: 0.5rem; }
-.verifyRow.alarm { border-left: 3px solid #ef4444; padding-left: 0.5rem; }
-.advDetails { margin-top: 0.35rem; font-size: 0.78rem; }
+.verifyAssert .ok { color: var(--p6-green, #22C55E); }
+.verifyAssert .alarm { color: var(--p6-red, #EF4444); }
+.verifyRow.ok { border-left: 3px solid var(--p6-green, #22C55E); padding-left: 0.5rem; }
+.verifyRow.alarm { border-left: 3px solid var(--p6-red, #EF4444); padding-left: 0.5rem; }
+.advDetails { margin-top: 0.35rem; font-size: 0.78rem; color: var(--p6-muted, #8aa0b5); }
 .advDetails pre {
-  background: #f6f8f7;
+  background: var(--p6-panel2, #16304c);
+  color: var(--p6-ink, #e8f0f7);
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--p6-border, rgba(40, 197, 255, 0.14));
+  border-radius: 6px;
   overflow: auto;
   max-height: 12rem;
+}
+.verifyPage .warn {
+  color: var(--p6-amber, #F59E0B);
 }

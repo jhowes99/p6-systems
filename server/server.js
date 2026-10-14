@@ -43,14 +43,27 @@ import { compileTeachModeToIR } from "./plc/teach_mode.js";
 import { exportCodesysST, exportSiemensSCL, exportAllenBradleyPlaceholder, exportPython } from "./plc/exporters.js";
 import { enforceSafetyDefaults } from "./plc/safety.js";
 import { createModelRouter } from "./model/routes.js";
+import { createEngineerRouter } from "./engineer/routes.js";
 import { initStore } from "./model/store.js";
 import { ensureWaterTransferProject } from "./model/seed_water_transfer.js";
 import { ensureTankTransferDemoProject } from "./model/seed_tank_transfer_demo.js";
 import { ProjectRuntimeBridge, attachBridge } from "./plc/project_binding.js";
 import { SignalHistoryBuffer } from "./plc/history_buffer.js";
-import { attachWaterTransfer } from "./plc/equipment/water_transfer.js";
+import {
+  attachWaterTransfer,
+  WT_PROCESS_FAULTS,
+  WT_FIDELITY
+} from "./plc/equipment/water_transfer.js";
 import { attachTankTransfer } from "./plc/equipment/tank_transfer.js";
-import { runFatTest, buildFatPdf, P101_ESTOP_SHUTDOWN } from "./verify/fat_runner.js";
+import { createVerifyRouter } from "./verify/routes.js";
+import { getConnectArchitecture } from "./connect/adapters.js";
+import {
+  buildEngineeringPackageZip,
+  approveEngineeringPackage,
+  getPackageApproval
+} from "./exports/engineering_package.js";
+import { collectEngineeringArtifacts } from "./exports/engineering_artifacts.js";
+import { generatePreliminaryHmiConfig } from "./exports/hmi_config.js";
 import { getActiveProject } from "./model/store.js";
 import { startOpcUaServer, getOpcUaStatus } from "./connect/opcua_server.js";
 import { startMqttPublisher, getMqttStatus } from "./connect/mqtt_publisher.js";
@@ -64,7 +77,7 @@ import {
   validateUdtPackage,
   TARGET_IGNITION_VERSION
 } from "./connect/ignition_udt.js";
-import { validateSignalCommand } from "./plc/command_validate.js";
+import { validateSignalCommand, CONTROL_LAYERS } from "./plc/command_validate.js";
 import { analyzeEquipmentXRay } from "./model/xray.js";
 import { buildInterlocksView, buildInterlockDetail } from "./model/interlocks_view.js";
 import { LogicDeployer } from "./plc/logic_deploy.js";
@@ -72,10 +85,11 @@ import { listEquipmentTypes, getEquipmentType } from "./plc/equipment/library.js
 import { traceFromTestFailure, traceFromSignal } from "./model/traceability.js";
 import { requirePerm, resolveRole, ROLES } from "./security/rbac.js";
 import { logConnectionEvent, listConnectionEvents } from "./security/connection_audit.js";
-import { extractText, mineCandidates } from "./plc/ocr_ingest.js";
+import { extractText, mineCandidates, runIngestPipeline } from "./plc/ocr_ingest.js";
 import { buildPlatformReport } from "./reports/hub.js";
 import { buildReadiness } from "./readiness.js";
 import { promoteExtractions } from "./model/ingest_promote.js";
+import { resolveRetainedPath } from "./model/ingest_documents.js";
 import { loadProject } from "./model/store.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -158,6 +172,8 @@ startMqttPublisher({ bridge: runtimeBridge })
   .catch((e) => console.error("MQTT init error:", e?.message || e));
 
 app.get("/api/connect/status", (_req, res) => {
+  const active = getActiveProject();
+  const architecture = getConnectArchitecture(active?.id || null);
   res.json({
     ok: true,
     mode: process.env.P6_LIVE_INTEGRATION === "1" ? "LIVE_INTEGRATION" : "SIMULATION",
@@ -171,10 +187,18 @@ app.get("/api/connect/status", (_req, res) => {
     ignition: {
       required: false,
       dockerProfile: "ignition",
-      note: "Optional Gateway via compose profile ignition"
+      liveProven: false,
+      note: "Optional Gateway via compose profile ignition — live path unproven (KI-019)"
     },
+    architecture,
+    liveDeployClaimed: false,
+    neverAutoWritePhysicalPlc: true,
     role: "see X-P6-Role header"
   });
+});
+app.get("/api/connect/architecture", (_req, res) => {
+  const active = getActiveProject();
+  res.json(getConnectArchitecture(active?.id || null));
 });
 app.get("/api/connect/opcua", (_req, res) => {
   res.json({ ok: true, ...getOpcUaStatus() });
@@ -317,12 +341,13 @@ app.get("/api/runtime/canvas", (_req, res) => {
       id: eq.id,
       tag: eq.tag,
       type: eq.type,
+      description: eq.description || "",
       operatingState: eq.operatingState,
       dataClass: eq.dataClass || null,
       x: saved?.x ?? 120 + (idx % 3) * 220,
       y: saved?.y ?? 100 + Math.floor(idx / 3) * 160,
-      w: saved?.w ?? (/tank/i.test(eq.type) ? 160 : 140),
-      h: saved?.h ?? (/tank/i.test(eq.type) ? 100 : 80),
+      w: saved?.w ?? (/tank/i.test(eq.type) ? 168 : 168),
+      h: saved?.h ?? (/tank/i.test(eq.type) ? 110 : 98),
       r: saved?.r ?? 0,
       locked: !!saved?.locked,
       properties: eq.properties || {},
@@ -335,6 +360,11 @@ app.get("/api/runtime/canvas", (_req, res) => {
     from: c.fromEquipmentId,
     to: c.toEquipmentId,
     type: c.connectionType,
+    fromPort: c.fromPortId || null,
+    toPort: c.toPortId || null,
+    fromPortId: c.fromPortId || null,
+    toPortId: c.toPortId || null,
+    invalid: !!c.invalid,
     waypoints: Array.isArray(c.waypoints) ? c.waypoints : []
   }));
   // Keep runtime bridge project.ui in sync so later reads are consistent
@@ -408,24 +438,37 @@ app.post("/api/runtime/command", (req, res) => {
     if (!tag) return res.status(400).json({ ok: false, error: "tag required" });
     const value = req.body?.value;
     const signals = runtimeBridge.listSignals();
-    const check = validateSignalCommand(tag, value, signals);
+    const equip = plc._waterTransferEquipment;
+    const dryRunLevelPct = equip?.fidelity?.dryRunLevelPct;
+    const check = validateSignalCommand(tag, value, signals, { dryRunLevelPct });
     if (!check.ok && req.body?.force !== true) {
+      plc._emit?.("command.rejected", { tag, value, reasons: check.reasons });
       audit("runtime.command_rejected", { tag, value, reasons: check.reasons });
       return res.status(409).json({
         ok: false,
         rejected: true,
         ...check,
-        signals: Object.fromEntries(signals.map((s) => [s.tag, s.currentValue]))
+        rejectReason: check.reasons?.[0] || "Command rejected",
+        layer: "equipment_command",
+        signals: Object.fromEntries(signals.map((s) => [s.tag, s.currentValue])),
+        process: equip?.snapshot?.() || null
       });
     }
     const signal = runtimeBridge.setSignal(String(tag), value, { override: !!req.body?.override });
+    plc._emit?.("command.accepted", {
+      tag,
+      value: signal.currentValue,
+      forced: !!req.body?.force
+    });
     audit("runtime.command", { tag, value: signal.currentValue, forced: !!req.body?.force });
     res.json({
       ok: true,
       signal,
       validation: check,
+      layer: "equipment_command",
       ...plc.status(),
-      mem: { M0: !!io.mem.M0, M1: !!io.mem.M1 }
+      mem: { M0: !!io.mem.M0, M1: !!io.mem.M1 },
+      lastShutdownReason: equip?.snapshot?.()?.lastShutdownReason || null
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
@@ -465,30 +508,107 @@ app.get("/api/equipment/library/:type", (req, res) => {
   res.json({ ok: true, type: t });
 });
 
-// Phase 18 — OCR ingest
-app.post("/api/ingest/ocr", upload.single("file"), async (req, res) => {
+// P6 Vision / Phase 04 — OCR / document ingest (multi-file pipeline; never auto-approve)
+app.post(
+  "/api/ingest/ocr",
+  upload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "files", maxCount: 20 }
+  ]),
+  async (req, res) => {
+    try {
+      const files = [
+        ...((req.files && req.files.file) || []),
+        ...((req.files && req.files.files) || [])
+      ];
+      if (!files.length && req.file?.buffer) files.push(req.file);
+      const result = await runIngestPipeline(files);
+      if (!result.ok) return res.status(400).json(result);
+      res.json(result);
+    } catch (e) {
+      res.status(400).json({ ok: false, error: String(e?.message || e) });
+    }
+  }
+);
+
+/** Retain originals + run pipeline in one step (optional projectId). */
+app.post(
+  "/api/ingest/pipeline",
+  upload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "files", maxCount: 20 }
+  ]),
+  async (req, res) => {
+    try {
+      const files = [
+        ...((req.files && req.files.file) || []),
+        ...((req.files && req.files.files) || [])
+      ];
+      const result = await runIngestPipeline(files);
+      if (!result.ok) return res.status(400).json(result);
+      res.json({
+        ...result,
+        progress: result.stages,
+        note: result.note
+      });
+    } catch (e) {
+      res.status(400).json({ ok: false, error: String(e?.message || e) });
+    }
+  }
+);
+
+app.get("/api/ingest/documents/:projectId/:docId/file", (req, res) => {
   try {
-    if (!req.file?.buffer) return res.status(400).json({ ok: false, error: "file required" });
-    const extracted = await extractText(req.file.buffer, req.file.mimetype);
-    const candidates = mineCandidates(extracted.text);
-    res.json({
-      ok: true,
-      extracted,
-      candidates,
-      note: "Candidates are ENGINEERING_INFERENCE until explicitly promoted/approved"
-    });
+    const project = loadProject(req.params.projectId);
+    if (!project) return res.status(404).json({ ok: false, error: "project not found" });
+    const doc = (project.documents || []).find((d) => d.id === req.params.docId);
+    if (!doc?.sourcePath) return res.status(404).json({ ok: false, error: "document file not retained" });
+    const abs = resolveRetainedPath(doc.sourcePath);
+    if (!abs) return res.status(404).json({ ok: false, error: "retained file missing on disk" });
+    res.sendFile(abs);
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
 });
-app.post("/api/ingest/ocr/promote", requirePerm("model.write"), (req, res) => {
+
+app.post("/api/ingest/ocr/promote", requirePerm("model.write"), upload.fields([
+  { name: "file", maxCount: 1 },
+  { name: "files", maxCount: 20 }
+]), (req, res) => {
   try {
-    const result = promoteExtractions({ ...req.body, placeOnCanvas: req.body?.placeOnCanvas !== false });
+    // JSON body promote (Studio) OR multipart with optional file retention
+    let body = req.body || {};
+    if (typeof body.equipment === "string") {
+      try {
+        body = {
+          ...body,
+          equipment: JSON.parse(body.equipment || "[]"),
+          instruments: body.instruments ? JSON.parse(body.instruments) : undefined,
+          connections: body.connections ? JSON.parse(body.connections) : undefined,
+          gaps: body.gaps ? JSON.parse(body.gaps) : undefined,
+          signals: body.signals ? JSON.parse(body.signals) : undefined,
+          approveAll: body.approveAll === true || body.approveAll === "true",
+          placeOnCanvas: body.placeOnCanvas !== "false" && body.placeOnCanvas !== false
+        };
+      } catch (_) {
+        /* keep raw */
+      }
+    }
+    const retainFiles = [
+      ...((req.files && req.files.file) || []),
+      ...((req.files && req.files.files) || [])
+    ];
+    const result = promoteExtractions({
+      ...body,
+      retainFiles,
+      placeOnCanvas: body?.placeOnCanvas !== false
+    });
     audit("ingest.ocr.promote", {
       projectId: result.project.id,
-      equipment: result.created.equipment.length
+      equipment: result.created.equipment.length,
+      connections: result.created.connections?.length || 0,
+      documents: result.created.documents?.length || 0
     });
-    // Keep Runtime bound to the updated canonical model so Studio sees live state immediately
     const bound = runtimeBridge.bindProject(result.project);
     res.status(201).json({
       ok: true,
@@ -560,53 +680,75 @@ app.use(
   })
 );
 
-// Phase 7 — P6 Verify
-app.get("/api/verify/tests", (_req, res) => {
-  res.json({
-    ok: true,
-    tests: [{
-      id: P101_ESTOP_SHUTDOWN.id,
-      name: P101_ESTOP_SHUTDOWN.name,
-      version: P101_ESTOP_SHUTDOWN.version,
-      description: P101_ESTOP_SHUTDOWN.description
-    }],
-    limits: [
-      "Catalog contains one Water Transfer reference FAT (P101_ESTOP_SHUTDOWN). Tank Transfer Studio demo uses Runtime bridge — additional FATs require real PLC assertions, not UI-only pass/fail."
-    ]
-  });
-});
+// P6 Engineer — preliminary controls templates / I/O / ST (engineer approval required)
+app.use("/api/engineer", createEngineerRouter({ audit }));
 
-app.post("/api/verify/run", async (req, res) => {
+// Phase 6 / M09–M11 — P6 Verify + engineering exports
+app.use("/api/verify", createVerifyRouter({ audit }));
+
+// Studio / Export workspace aliases (same builders as /api/verify/exports/*)
+app.get("/api/exports/artifacts", (req, res) => {
   try {
-    const testId = req.body?.testId || P101_ESTOP_SHUTDOWN.id;
-    if (testId !== P101_ESTOP_SHUTDOWN.id) {
-      return res.status(404).json({ ok: false, error: `Unknown test: ${testId}` });
-    }
-    const active = getActiveProject();
-    const { pass, result } = await runFatTest(P101_ESTOP_SHUTDOWN, {
-      projectId: active?.id || null,
-      modelVersion: active?.modelVersion || null
-    });
-    audit("verify.run", { testId, pass });
-    res.json({ ok: true, pass, result });
+    const project = getActiveProject();
+    if (!project) return res.status(404).json({ ok: false, error: "No active project" });
+    res.json(collectEngineeringArtifacts(project));
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
-
-app.post("/api/verify/run.pdf", async (req, res) => {
+app.get("/api/exports/hmi", (_req, res) => {
   try {
-    const active = getActiveProject();
-    const { pass, result } = await runFatTest(P101_ESTOP_SHUTDOWN, {
-      projectId: active?.id || null,
-      modelVersion: active?.modelVersion || null
-    });
-    const pdf = await buildFatPdf(result);
-    audit("verify.run_pdf", { testId: result.testId, pass, bytes: pdf.length });
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${result.testId}_${pass ? "PASS" : "FAIL"}.pdf"`);
-    res.send(pdf);
+    const project = getActiveProject();
+    if (!project) return res.status(404).json({ ok: false, error: "No active project" });
+    res.json(generatePreliminaryHmiConfig(project));
   } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+app.get("/api/exports/package/approval", (_req, res) => {
+  const project = getActiveProject();
+  res.json({ ok: true, ...getPackageApproval(project?.id) });
+});
+app.post("/api/exports/package/approve", (req, res) => {
+  try {
+    const project = getActiveProject();
+    if (!project) return res.status(404).json({ ok: false, error: "No active project" });
+    const approval = approveEngineeringPackage(project.id, {
+      actor: req.body?.actor || "engineer",
+      note: req.body?.note || ""
+    });
+    audit("exports.package.approve", { projectId: project.id, actor: approval.actor });
+    res.json({ ok: true, approval });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+app.get("/api/exports/package/download", async (req, res) => {
+  try {
+    const project = getActiveProject();
+    if (!project) return res.status(404).json({ ok: false, error: "No active project" });
+    const forcePreview =
+      req.query?.forcePreview === "1" || req.query?.forcePreview === "true";
+    const { buffer, filename, approval, forcePreview: preview } =
+      await buildEngineeringPackageZip(project, { forcePreview });
+    audit("exports.package.download", {
+      projectId: project.id,
+      bytes: buffer.length,
+      preview: !!preview,
+      approved: !!approval.approved
+    });
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (e) {
+    if (e?.code === "NOT_APPROVED") {
+      return res.status(403).json({
+        ok: false,
+        error: e.message,
+        code: "NOT_APPROVED",
+        hint: "POST /api/exports/package/approve or use ?forcePreview=1"
+      });
+    }
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
@@ -1035,31 +1177,38 @@ app.post("/api/runtime/persist-signals", (req, res) => {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
 });
+/** Sim-layer controls — scan / SimClock only (does NOT start the pump). */
 app.post("/api/runtime/start", (req, res) => {
   plc.start();
-  audit("runtime.start", {});
-  res.json({ ok: true, ...plc.status() });
+  audit("runtime.start", { layer: "sim" });
+  res.json({ ok: true, layer: "sim", ...plc.status(), controlLayers: CONTROL_LAYERS });
 });
 app.post("/api/runtime/stop", (req, res) => {
   plc.stop();
-  audit("runtime.stop", {});
-  res.json({ ok: true, ...plc.status() });
+  audit("runtime.stop", { layer: "sim" });
+  res.json({ ok: true, layer: "sim", ...plc.status() });
 });
 app.post("/api/runtime/pause", (req, res) => {
   plc.pause();
-  audit("runtime.pause", {});
-  res.json({ ok: true, ...plc.status() });
+  audit("runtime.pause", { layer: "sim" });
+  res.json({ ok: true, layer: "sim", ...plc.status() });
 });
 app.post("/api/runtime/resume", (req, res) => {
   plc.resume();
-  audit("runtime.resume", {});
-  res.json({ ok: true, ...plc.status() });
+  audit("runtime.resume", { layer: "sim" });
+  res.json({ ok: true, layer: "sim", ...plc.status() });
 });
 app.post("/api/runtime/step", async (req, res) => {
   try {
     await plc.step();
-    audit("runtime.step", { scanCount: plc.clock.scanCount });
-    res.json({ ok: true, ...plc.status(), signals: runtimeBridge.listSignals() });
+    audit("runtime.step", { scanCount: plc.clock.scanCount, layer: "sim" });
+    res.json({
+      ok: true,
+      layer: "sim",
+      ...plc.status(),
+      signals: runtimeBridge.listSignals(),
+      process: plc._waterTransferEquipment?.snapshot?.() || null
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
@@ -1071,8 +1220,8 @@ app.post("/api/runtime/reset", (req, res) => {
       clearFaults: req.body?.clearFaults !== false,
       retainMem: !!req.body?.retainMem
     });
-    audit("runtime.reset", {});
-    res.json({ ok: true, ...plc.status(), signals: runtimeBridge.listSignals() });
+    audit("runtime.reset", { layer: "sim" });
+    res.json({ ok: true, layer: "sim", ...plc.status(), signals: runtimeBridge.listSignals() });
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
@@ -1082,8 +1231,109 @@ app.post("/api/runtime/speed", (req, res) => {
   try {
     const scanMs = Math.max(5, Math.min(500, Number(req.body?.scanMs) || 50));
     plc.setScanMs(scanMs);
-    audit("runtime.speed", { scanMs });
-    res.json({ ok: true, scanMs: plc.scanMs, ...plc.status() });
+    audit("runtime.speed", { scanMs, layer: "sim" });
+    res.json({ ok: true, layer: "sim", scanMs: plc.scanMs, ...plc.status() });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+/** Process observability — water-transfer plant snapshot + fidelity limits. */
+app.get("/api/runtime/process", (_req, res) => {
+  const equip = plc._waterTransferEquipment;
+  res.json({
+    ok: true,
+    template: plc._plantTemplate || plc.programIR?.metadata?.template || null,
+    process: equip?.snapshot?.() || null,
+    fidelity: equip?.fidelity || plc.programIR?.metadata?.fidelity || WT_FIDELITY,
+    processFaultCatalog: WT_PROCESS_FAULTS,
+    controlLayers: CONTROL_LAYERS,
+    ioFaults: io.listFaults(),
+    lastShutdownReason: equip?.snapshot?.()?.lastShutdownReason || null,
+    sim: plc.clock.snapshot(),
+    mem: { M0: !!io.mem?.M0, M1: !!io.mem?.M1 }
+  });
+});
+
+/**
+ * Named process-fault injection (propagates through equipment + ladder).
+ * Body: { name: "pump_fault"|"valve_fail"|..., active?: true }
+ * Also accepts legacy IO force via /api/fault.
+ */
+app.post("/api/runtime/process-fault", (req, res) => {
+  try {
+    const name = String(req.body?.name || req.body?.fault || "").trim();
+    const active = req.body?.active !== false && req.body?.on !== false;
+    const equip = plc._waterTransferEquipment;
+    if (!equip?.setProcessFault) {
+      return res.status(400).json({
+        ok: false,
+        error: "Process faults require water_transfer plant template bound to Runtime"
+      });
+    }
+    if (!name) {
+      return res.status(400).json({
+        ok: false,
+        error: "name required",
+        catalog: WT_PROCESS_FAULTS
+      });
+    }
+    // Map common scenarios onto IO force as well for sensor_fail / high_dest
+    if (name === "high_dest" && active) {
+      io.setFault({ var: "I2", mode: "force", value: true });
+    }
+    if (name === "high_dest" && !active) io.clearFault("I2");
+    if (name === "valve_fail" && active) {
+      io.setFault({ var: "I1", mode: "stuck", value: false });
+    }
+    if (name === "valve_fail" && !active) io.clearFault("I1");
+    if (name === "pump_fault" && active) {
+      io.setFault({ var: "Q2", mode: "force", value: true });
+    }
+    if (name === "pump_fault" && !active) io.clearFault("Q2");
+    if (name === "sensor_fail" && active) {
+      const lvl = Number(io.analogInputs.A1 ?? 0);
+      io.setFault({ var: "A1", mode: "stuck", value: lvl });
+    }
+    if (name === "sensor_fail" && !active) io.clearFault("A1");
+    if (name === "instrument_loss" && active) {
+      io.setFault({ var: "A2", mode: "stuck", value: Number(io.analogInputs.A2 ?? 0) });
+      io.setFault({ var: "A3", mode: "stuck", value: Number(io.analogInputs.A3 ?? 0) });
+    }
+    if (name === "instrument_loss" && !active) {
+      io.clearFault("A2");
+      io.clearFault("A3");
+    }
+    if (name === "comm_loss" && active) {
+      /* equipment honors processFaults.comm_loss — no IO force */
+    }
+
+    const snap = equip.setProcessFault(name, active);
+    audit("runtime.process_fault", { name, active });
+    res.json({
+      ok: true,
+      name,
+      active,
+      description: WT_PROCESS_FAULTS[name] || null,
+      process: snap,
+      ioFaults: io.listFaults()
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message || e), catalog: WT_PROCESS_FAULTS });
+  }
+});
+
+app.delete("/api/runtime/process-fault", (req, res) => {
+  try {
+    const equip = plc._waterTransferEquipment;
+    equip?.clearProcessFaults?.();
+    for (const v of ["I1", "I2", "Q2", "A1", "A2", "A3"]) io.clearFault(v);
+    audit("runtime.process_fault_clear", {});
+    res.json({
+      ok: true,
+      process: equip?.snapshot?.() || null,
+      ioFaults: io.listFaults()
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: String(e?.message || e) });
   }
@@ -1263,16 +1513,24 @@ app.post("/api/analog/:name", (req, res) => {
   }
 });
 
-// Fault injection (force/stuck for I/Q/M)
+// Fault injection (force/stuck for I/Q/M/A/B)
 app.get("/api/faults", (req, res) => {
-  res.json({ ok: true, faults: io.listFaults() });
+  res.json({
+    ok: true,
+    faults: io.listFaults(),
+    processFaultCatalog: WT_PROCESS_FAULTS,
+    process: plc._waterTransferEquipment?.snapshot?.() || null
+  });
 });
 app.post("/api/fault", (req, res) => {
   try {
     const v = String(req.body?.var || "").trim();
     const mode = String(req.body?.mode || "").trim();
-    const value = !!req.body?.value;
+    const raw = req.body?.value;
+    const isAnalog = /^[AB]\d+$/i.test(v);
+    const value = isAnalog ? Number(raw) : !!raw;
     const f = io.setFault({ var: v, mode, value });
+    plc._emit?.("fault.io", { var: f.var, mode: f.mode, value: f.value });
     audit("fault.set", { var: f.var, mode: f.mode, value: f.value });
     res.json({ ok: true, fault: f, faults: io.listFaults() });
   } catch (e) {

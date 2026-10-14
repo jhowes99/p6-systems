@@ -5,6 +5,7 @@
 
 import { SignalQuality, SignalDirection, DataType } from "../model/schema.js";
 import { getActiveProject, loadProject, saveProject } from "../model/store.js";
+import { attachPlantForProject } from "./equipment/plant_template.js";
 
 function isAnalogAddr(addr) {
   return /^[AB]\d+$/i.test(String(addr || ""));
@@ -61,6 +62,9 @@ export class ProjectRuntimeBridge {
     this.addressToTag.clear();
     this.plc.boundProjectId = project.id;
 
+    // Match ladder + equipment sim to this project (tank vs water transfer)
+    const plant = attachPlantForProject(this.plc, this.io, project);
+
     // Temporarily leave strict off so we can declare addresses
     const wasStrict = !!this.io.strict;
     this.io.setStrict(false);
@@ -104,7 +108,9 @@ export class ProjectRuntimeBridge {
       projectId: project.id,
       name: project.name,
       signalCount: this.live.size,
-      addresses: [...this.addressToTag.keys()]
+      addresses: [...this.addressToTag.keys()],
+      plantTemplate: plant.template,
+      plantAttached: plant.attached
     };
   }
 

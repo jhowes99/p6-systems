@@ -82,6 +82,18 @@ export function createEmptyProject({ name, description = "", id: givenId } = {})
     vendorMappings: [],
     /** Last validateProject snapshot (informational) */
     lastValidation: null,
+    /** P6 Engineer — template apps, I/O proposals, ST artifacts, reviews (additive) */
+    engineer: {
+      templateApplications: [],
+      ioProposals: [],
+      logicArtifacts: [],
+      logicReviews: [],
+      strategySuggestions: [],
+      safetyApprovals: [],
+      lastGenerate: null,
+      lastIoProposal: null,
+      lastStrategy: null
+    },
     // Bridge to existing ladder IR / C&E until Runtime Phase 3–4 fully adopts the model
     legacy: {
       ladderIR: null,
@@ -290,9 +302,12 @@ export function createConnection({
   projectId,
   fromEquipmentId,
   toEquipmentId,
-  connectionType = "process", // process | instrument | signal | mechanical | electrical | communication
+  connectionType = "process", // process | instrument | signal | mechanical | electrical | control | communication
   description = "",
-  waypoints = []
+  waypoints = [],
+  fromPortId = null,
+  toPortId = null,
+  invalid = false
 }) {
   return {
     id: id("conn"),
@@ -301,6 +316,9 @@ export function createConnection({
     toEquipmentId,
     connectionType,
     description,
+    fromPortId: fromPortId ? String(fromPortId) : null,
+    toPortId: toPortId ? String(toPortId) : null,
+    invalid: !!invalid,
     waypoints: Array.isArray(waypoints)
       ? waypoints.map((w) => ({ x: Number(w.x) || 0, y: Number(w.y) || 0 })).filter((w) => Number.isFinite(w.x) && Number.isFinite(w.y))
       : [],
@@ -545,6 +563,21 @@ export function normalizeProject(raw) {
     controlSequences: Array.isArray(raw?.controlSequences) ? raw.controlSequences : [],
     vendorMappings: Array.isArray(raw?.vendorMappings) ? raw.vendorMappings : [],
     lastValidation: raw?.lastValidation ?? null,
+    engineer: {
+      templateApplications: Array.isArray(raw?.engineer?.templateApplications)
+        ? raw.engineer.templateApplications
+        : [],
+      ioProposals: Array.isArray(raw?.engineer?.ioProposals) ? raw.engineer.ioProposals : [],
+      logicArtifacts: Array.isArray(raw?.engineer?.logicArtifacts) ? raw.engineer.logicArtifacts : [],
+      logicReviews: Array.isArray(raw?.engineer?.logicReviews) ? raw.engineer.logicReviews : [],
+      strategySuggestions: Array.isArray(raw?.engineer?.strategySuggestions)
+        ? raw.engineer.strategySuggestions
+        : [],
+      safetyApprovals: Array.isArray(raw?.engineer?.safetyApprovals) ? raw.engineer.safetyApprovals : [],
+      lastGenerate: raw?.engineer?.lastGenerate ?? null,
+      lastIoProposal: raw?.engineer?.lastIoProposal ?? null,
+      lastStrategy: raw?.engineer?.lastStrategy ?? null
+    },
     legacy: {
       ladderIR: raw?.legacy?.ladderIR ?? null,
       ioMap: raw?.legacy?.ioMap && typeof raw.legacy.ioMap === "object" ? raw.legacy.ioMap : {},

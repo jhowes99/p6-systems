@@ -37,13 +37,15 @@ assert(paths.root === tmpRoot, `store root mismatch: ${paths.root}`);
 const { project, created } = ensureWaterTransferProject();
 assert(created === true, "first seed should create");
 assert(project.schemaVersion === SCHEMA_VERSION, "schema version");
-assert(project.equipment.length === 6, `expected 6 equipment, got ${project.equipment.length}`);
+assert(project.equipment.length === 10, `expected 10 equipment, got ${project.equipment.length}`);
 assert(project.signals.length >= 10, "expected signals");
 assert(project.equipment.every((e) => e.dataClass === DataClass.ENGINEER_APPROVED), "seed equipment approved");
 assert(project.testCases.some((t) => t.name === "P101_ESTOP_SHUTDOWN"), "FAT definition present");
+assert(project.ui?.graph?.nodes, "water transfer graph layout");
+assert((project.connections || []).length >= 3, "water transfer process connections");
 
 const tags = new Set(project.equipment.map((e) => e.tag));
-for (const t of ["TANK101", "XV101", "P101", "M101", "LSH101", "ESTOP101"]) {
+for (const t of ["TANK101", "TANK102", "XV101", "P101", "M101", "LSH101", "ESTOP101", "LT101", "FT101", "PT101"]) {
   assert(tags.has(t), `missing equipment ${t}`);
 }
 

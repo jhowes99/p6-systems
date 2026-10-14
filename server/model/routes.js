@@ -103,7 +103,9 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
       if (!projectId) return res.status(400).json({ ok: false, error: "projectId required" });
       const project = setActiveProject(projectId);
       audit("model.project.activate", { id: projectId });
-      res.json({ ok: true, project });
+      // Keep Runtime bound to the project the engineer just opened (canvas + live tags stay aligned)
+      const runtime = notifyModelChange(project, "project.activate");
+      res.json({ ok: true, project, runtimeBound: runtime || null });
     } catch (e) {
       res.status(404).json({ ok: false, error: String(e?.message || e) });
     }
@@ -484,7 +486,7 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         if (fromEquipmentId === toEquipmentId) throw new Error("Cannot connect equipment to itself");
         if (!p.equipment.some((e) => e.id === fromEquipmentId)) throw new Error("from equipment not found");
         if (!p.equipment.some((e) => e.id === toEquipmentId)) throw new Error("to equipment not found");
-        const allowed = ["process", "instrument", "mechanical", "signal", "electrical"];
+        const allowed = ["process", "instrument", "mechanical", "signal", "electrical", "control", "communication"];
         if (!allowed.includes(connectionType)) throw new Error(`Invalid connectionType: ${connectionType}`);
         const dup = (p.connections || []).some(
           (c) =>
@@ -498,7 +500,10 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
           fromEquipmentId,
           toEquipmentId,
           connectionType,
-          description: req.body?.description || ""
+          description: req.body?.description || "",
+          fromPortId: req.body?.fromPortId || null,
+          toPortId: req.body?.toPortId || null,
+          invalid: !!req.body?.invalid
         });
         p.connections.push(conn);
         return p;
@@ -524,6 +529,9 @@ export function createModelRouter({ audit = () => {}, onModelChange = null } = {
         if (!conn) throw new Error("Connection not found");
         if (req.body?.connectionType != null) conn.connectionType = String(req.body.connectionType);
         if (req.body?.description != null) conn.description = String(req.body.description);
+        if (req.body?.fromPortId !== undefined) conn.fromPortId = req.body.fromPortId ? String(req.body.fromPortId) : null;
+        if (req.body?.toPortId !== undefined) conn.toPortId = req.body.toPortId ? String(req.body.toPortId) : null;
+        if (req.body?.invalid != null) conn.invalid = !!req.body.invalid;
         if (Array.isArray(req.body?.waypoints)) {
           conn.waypoints = req.body.waypoints
             .map((w) => ({ x: Number(w.x), y: Number(w.y) }))

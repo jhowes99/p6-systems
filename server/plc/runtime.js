@@ -270,6 +270,7 @@ export class VirtualPLC {
           io: this.io,
           simTimeMs: this.clock.timeMs,
           scanCount: this.clock.scanCount,
+          scanMs: this.scanMs,
           I, Q, M, A, B
         });
         tEquipMs = Number(process.hrtime.bigint() - tE0) / 1e6;

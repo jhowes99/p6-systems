@@ -42,7 +42,15 @@
   let ilkPollTick = 0;
   let selectedLinkId = null;
   let workspaceMode = "engineering"; // engineering | simulation | diagnostic (canvas behavior)
-  let workspace = "design"; // design | logic | io | simulate | verify
+  let workspace = "design"; // design | engineer | simulate | verify
+  /** P&ID schematic vs SCADA status — same equipment model */
+  let symbolMode = "pid"; // pid | scada
+  let showPorts = true;
+  let symbolModeUserOverride = false;
+  let dragLock = false; // prevent accidental moves when checked
+  const DRAG_THRESHOLD_PX = 8;
+  let clipboardNodes = null;
+  let lastVerifyChip = "—";
   let rafId = 0;
   let pollInFlight = false;
   let lastPollAt = 0;
@@ -76,16 +84,61 @@
   const ctxMenu = document.getElementById("ctxMenu");
   const minimapCanvas = document.getElementById("minimapCanvas");
 
-  const LIB_TYPES = [
-    { type: "tank", label: "Storage tank" },
-    { type: "pump", label: "Centrifugal pump" },
-    { type: "motor", label: "Electric motor" },
-    { type: "valve", label: "Isolation valve" },
-    { type: "level_transmitter", label: "Level transmitter" },
-    { type: "pressure_transmitter", label: "Pressure transmitter" },
-    { type: "flow_transmitter", label: "Flow transmitter" },
-    { type: "emergency_stop_input", label: "E-stop (sim)" }
+  const LIB_CATEGORY_ORDER = [
+    ["pumps", "Pumps", ["pump"]],
+    ["tanks", "Tanks", ["tank", "vessel"]],
+    ["motors", "Motors", ["motor"]],
+    ["valves", "Valves", ["valve", "control_valve", "check_valve", "butterfly_valve"]],
+    ["instrumentation", "Instrumentation", [
+      "level_transmitter", "flow_transmitter", "pressure_transmitter", "temperature_transmitter",
+      "level_switch", "pressure_switch"
+    ]],
+    ["process", "Process Equipment", ["mixer", "compressor", "blower", "heat_exchanger"]],
+    ["electrical", "Electrical", ["motor"]],
+    ["control", "Control Components", ["emergency_stop_input"]]
   ];
+  function buildLibCategories() {
+    const regTypes = (window.P6Symbols && typeof window.P6Symbols.libraryTypes === "function")
+      ? window.P6Symbols.libraryTypes()
+      : [];
+    const byType = Object.fromEntries(regTypes.map((t) => [t.type, t]));
+    if (!regTypes.length) {
+      return [
+        { id: "pumps", label: "Pumps", items: [{ type: "pump", label: "Centrifugal pump" }] },
+        { id: "tanks", label: "Tanks", items: [{ type: "tank", label: "Storage tank" }] },
+        { id: "motors", label: "Motors", items: [{ type: "motor", label: "Electric motor" }] },
+        { id: "valves", label: "Valves", items: [{ type: "valve", label: "Isolation valve" }] },
+        {
+          id: "instrumentation",
+          label: "Instrumentation",
+          items: [
+            { type: "level_transmitter", label: "Level transmitter" },
+            { type: "pressure_transmitter", label: "Pressure transmitter" },
+            { type: "flow_transmitter", label: "Flow transmitter" }
+          ]
+        },
+        { id: "control", label: "Control Components", items: [{ type: "emergency_stop_input", label: "E-stop (sim)" }] }
+      ];
+    }
+    const used = new Set();
+    const cats = [];
+    for (const [id, label, types] of LIB_CATEGORY_ORDER) {
+      const items = [];
+      for (const t of types) {
+        if (used.has(t) || !byType[t]) continue;
+        used.add(t);
+        items.push({ type: byType[t].type, label: byType[t].label });
+      }
+      if (items.length) cats.push({ id, label, items });
+    }
+    const extras = regTypes.filter((t) => !used.has(t.type));
+    if (extras.length) cats.push({ id: "other", label: "Other", items: extras.map((t) => ({ type: t.type, label: t.label })) });
+    return cats;
+  }
+  const LIB_CATEGORIES = buildLibCategories();
+  const LIB_TYPES = LIB_CATEGORIES.flatMap((c) => c.items).filter(
+    (item, idx, arr) => arr.findIndex((x) => x.type === item.type) === idx
+  );
 
   /** Cached from /api/readiness — also posted into Alarms for a second reminder. */
   let platformLimitsCache = [];
@@ -99,6 +152,50 @@
     const n = alarmLog.querySelectorAll(".ev").length;
     const limits = alarmLog.querySelectorAll(".ev.limit").length;
     btn.textContent = limits ? `Alarms · ${limits} limits` : (n ? `Alarms (${n})` : "Alarms");
+    updateStatusChips();
+  }
+
+  function updateStatusChips() {
+    const chipSave = document.getElementById("chipSave");
+    const chipSim = document.getElementById("chipSim");
+    const chipAlarms = document.getElementById("chipAlarms");
+    const chipWarn = document.getElementById("chipWarn");
+    const chipVerify = document.getElementById("chipVerify");
+    const pillSave = document.getElementById("pillSave");
+    const pillSim = document.getElementById("pillSim");
+    const pillRun = document.getElementById("pillRun");
+    if (chipSave && pillSave) {
+      const dirty = /UNSAVED|dirty/i.test(pillSave.textContent || "") || pillSave.classList.contains("dirty");
+      chipSave.textContent = dirty ? "Save · unsaved" : /SAVED/i.test(pillSave.textContent || "") ? "Save · saved" : "Save · —";
+      chipSave.classList.toggle("dirty", dirty);
+      chipSave.classList.toggle("ok", !dirty && /SAVED/i.test(pillSave.textContent || ""));
+    }
+    if (chipSim) {
+      const simTxt = (pillSim?.textContent || pillRun?.textContent || "—").trim();
+      chipSim.textContent = `Sim · ${simTxt}`;
+      chipSim.classList.toggle("ok", /RUN|RUNNING|ACTIVE/i.test(simTxt));
+      chipSim.classList.toggle("warn", /PAUSE|STOP|IDLE/i.test(simTxt));
+    }
+    const alarmLog = document.getElementById("alarmLog");
+    const activeAlarms = alarmLog
+      ? [...alarmLog.querySelectorAll(".ev.alarm")].filter((el) => !el.dataset.stickyLimit).length
+      : 0;
+    if (chipAlarms) {
+      chipAlarms.textContent = `Alarms · ${activeAlarms}`;
+      chipAlarms.classList.toggle("alarm", activeAlarms > 0);
+    }
+    const warnCount = (lastModelValidation?.issues || []).filter(
+      (i) => i.severity === "warning" || i.severity === "error"
+    ).length;
+    if (chipWarn) {
+      chipWarn.textContent = `Warnings · ${warnCount}`;
+      chipWarn.classList.toggle("warn", warnCount > 0);
+    }
+    if (chipVerify) {
+      chipVerify.textContent = `Verify · ${lastVerifyChip}`;
+      chipVerify.classList.toggle("ok", /PASS/i.test(lastVerifyChip));
+      chipVerify.classList.toggle("alarm", /FAIL/i.test(lastVerifyChip));
+    }
   }
 
   /**
@@ -251,6 +348,38 @@
     const el = document.getElementById("pillSave");
     el.className = "pill " + (state === "dirty" ? "dirty" : state === "saved" ? "saved" : "");
     el.textContent = state === "dirty" ? "UNSAVED LAYOUT" : state === "saved" ? "SAVED" : "SAVE";
+    updateStatusChips();
+  }
+
+  /** Plain-language explanations for ordinary engineers (no raw reject codes). */
+  function engineerExplain(tag, reasons, fallback) {
+    const joined = (reasons || []).join(" · ");
+    const src = `${tag || ""} ${joined} ${fallback || ""}`;
+    if (/LEVEL HIGH|LSH|LT-10/i.test(src)) {
+      return "Cannot start — destination tank level is above the high limit (high switch active). Clear the high level, then try again.";
+    }
+    if (/E-?STOP|ESD/i.test(src) && /ACTIVE|Healthy/i.test(src)) {
+      return "Cannot start — emergency stop is active (simulation). Clear E-stop and reset the trip latch, then try again.";
+    }
+    if (/VALVE-101 NOT OPEN/i.test(src)) {
+      return "Cannot start — isolation valve VALVE-101 is not open. Open the valve (or wait for open feedback), then start transfer.";
+    }
+    if (/XV-101 NOT OPEN/i.test(src)) {
+      return "Cannot start — valve XV-101 is not open. Open the valve, then try again.";
+    }
+    if (/XV-102 NOT OPEN/i.test(src)) {
+      return "Cannot start — valve XV-102 is not open. Open the valve, then try again.";
+    }
+    if (/NOT OPEN/i.test(src)) {
+      return "Cannot start — a required valve is not open. Check valve commands and open feedback, then try again.";
+    }
+    if (joined) {
+      return joined
+        .replace(/START REJECTED\s*—?\s*/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    return fallback || "Command was rejected by Runtime permissives.";
   }
 
   function applyTransform() {
@@ -521,12 +650,48 @@
   }
 
   function syncInspTabs() {
+    const primary = ["overview", "control", "io", "interlocks"];
     [...document.getElementById("inspTabs").querySelectorAll("button")].forEach((x) =>
       x.classList.toggle("active", x.dataset.tab === inspTab)
     );
+    document.querySelectorAll("#advEngineering [data-tab]").forEach((x) =>
+      x.classList.toggle("active", x.dataset.tab === inspTab)
+    );
+    if (!primary.includes(inspTab)) {
+      document.getElementById("advEngineering")?.setAttribute("open", "");
+    }
   }
 
-  function symbolSvg(type, running, valveState) {
+  function setSymbolMode(mode, { user = false, silent = false } = {}) {
+    const next = mode === "scada" ? "scada" : "pid";
+    if (user) symbolModeUserOverride = true;
+    symbolMode = next;
+    studio.dataset.symbolMode = next;
+    studio.classList.toggle("symbol-scada", next === "scada");
+    studio.classList.toggle("symbol-pid", next === "pid");
+    const toggle = document.getElementById("symbolModeToggle");
+    if (toggle) toggle.dataset.symbolMode = next;
+    document.getElementById("btnSymPid")?.classList.toggle("active", next === "pid");
+    document.getElementById("btnSymScada")?.classList.toggle("active", next === "scada");
+    if (!silent && lastCanvas) {
+      for (const [id, el] of nodeEls) {
+        delete el.dataset.symKey;
+        const n = lastCanvas.nodes?.find((x) => x.id === id);
+        if (n) patchNodeEl(el, n);
+      }
+    }
+  }
+
+  function symbolSvg(type, running, valveState, live) {
+    if (window.P6Symbols && typeof window.P6Symbols.renderSymbol === "function") {
+      const liveObj = live && typeof live === "object" ? { ...live } : {};
+      if (running && !Object.keys(liveObj).some((k) => /Running|Energize/i.test(k))) {
+        liveObj.P6_Running = true;
+      }
+      if (valveState === "open") liveObj.OpenedFeedback = true;
+      else if (valveState === "opening") liveObj.OpenCommand = true;
+      return window.P6Symbols.renderSymbol(type, symbolMode, liveObj).html;
+    }
     const t = String(type || "").toLowerCase();
     if (t.includes("pump")) {
       const flow = running ? `<path class="flowPulse" d="M2 16 H12" stroke="#22C55E" stroke-width="2"/><path class="flowPulse" d="M36 16 H46" stroke="#22C55E" stroke-width="2"/>` : `<path d="M2 16 H12" stroke="#3a5570" stroke-width="2"/><path d="M36 16 H46" stroke="#3a5570" stroke-width="2"/>`;
@@ -560,11 +725,59 @@
     return `<svg viewBox="0 0 48 32"><rect x="10" y="8" width="28" height="16" rx="2" fill="none" stroke="#8aa0b5" stroke-width="2"/></svg>`;
   }
 
+  function syncPortAnchors(el, node) {
+    let host = el.querySelector(".portAnchors");
+    const show =
+      showPorts &&
+      (connectMode || selectedIds.has(node.id) || selected?.id === node.id || selectedLinkId);
+    if (!window.P6Symbols?.portsFor) {
+      if (host) host.remove();
+      return;
+    }
+    const ports = window.P6Symbols.portsFor(node.type);
+    if (!show || !ports.length) {
+      if (host) host.hidden = true;
+      return;
+    }
+    if (!host) {
+      host = document.createElement("div");
+      host.className = "portAnchors";
+      el.appendChild(host);
+    }
+    host.hidden = false;
+    const key = ports.map((p) => p.id).join(",");
+    if (host.dataset.portKey !== key) {
+      host.dataset.portKey = key;
+      host.innerHTML = ports
+        .map(
+          (p) =>
+            `<span class="portDot" data-port="${esc(p.id)}" data-kind="${esc((p.kinds || []).join(","))}" title="${esc(p.label || p.id)}" style="left:${(p.u || 0) * 100}%;top:${(p.v || 0) * 100}%"></span>`
+        )
+        .join("");
+    }
+  }
+
+  /** Live-signal reason for the top-right "!" alarm badge (null = not in alarm). */
+  function alarmBadgeReason(node) {
+    const live = node.live || {};
+    for (const [k, v] of Object.entries(live)) {
+      if (/ESTOP/i.test(k) && v === false) {
+        return `Alarm: ${k}=false — E-stop / trip input not healthy (sim).`;
+      }
+      if (/Healthy/i.test(k) && v === false) {
+        return `Alarm: ${k}=false — equipment not healthy.`;
+      }
+      if (/Fault/i.test(k) && v === true) {
+        return `Alarm: ${k}=true — fault active.`;
+      }
+    }
+    return null;
+  }
+
   function statusClass(node) {
     const live = node.live || {};
     const keys = Object.keys(live);
-    if (keys.some((k) => /ESTOP|Healthy/i.test(k) && live[k] === false)) return "alarm";
-    if (keys.some((k) => /Fault/i.test(k) && live[k] === true)) return "alarm";
+    if (alarmBadgeReason(node)) return "alarm";
     if (keys.some((k) => /Running|Energize/i.test(k) && live[k] === true)) return "run";
     if (/valve/i.test(node.type) && keys.some((k) => /Opened/i.test(k) && live[k] === true)) return "open";
     if (/valve/i.test(node.type) && keys.some((k) => /OpenCommand/i.test(k) && live[k] === true)) return "trans";
@@ -629,17 +842,19 @@
       host.querySelectorAll("[data-pid]").forEach((btn) => {
         btn.onclick = async () => {
           try {
+            if (layoutDirty && !confirm("You have unsaved layout changes. Open another project anyway?")) return;
             await api("/api/model/projects/active", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ projectId: btn.getAttribute("data-pid") })
             });
-            await refreshProject();
-            await refreshCanvas();
+            projectId = btn.getAttribute("data-pid");
+            await syncRuntime("project open");
             await refreshProjectList();
             fitViewSoon(2, { force: true });
             logEvent(`Opened project ${btn.textContent}`, "ok");
             setWorkspace("design");
+            tryRestoreAutosave();
           } catch (e) {
             logEvent(e.message, "alarm");
           }
@@ -667,9 +882,12 @@
     } catch (_) {
       logicStatusCache = null;
     }
-    if (inspTab === "control" && selected) renderInspector();
-    if (!selected && workspaceMode === "diagnostic") renderInspectorEmptyLogic();
-    if (workspace === "io") refreshIoPanel().catch(() => {});
+    // Avoid wiping inspector inputs while the engineer is typing
+    const ae = document.activeElement;
+    const typing = ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName || "");
+    if (inspTab === "control" && selected && !typing) renderInspector();
+    if (!selected && workspaceMode === "diagnostic" && !typing) renderInspectorEmptyLogic();
+    if (workspace === "engineer" && view === "io") refreshIoPanel().catch(() => {});
   }
 
   function logicObservabilityHtml() {
@@ -711,6 +929,18 @@
       const t = s.simClock?.timeMs ?? s.timeMs ?? s.sim?.timeMs;
       document.getElementById("pillSim").textContent = t != null ? `SIM ${t}ms` : "SIM —";
       if (s.mem?.M1 || ioTripHint(lastCanvas)) run.classList.add("trip");
+      const warn = document.getElementById("simBindWarn");
+      if (warn) {
+        const bound = s.boundProjectId || null;
+        const mismatch = !!(projectId && bound && projectId !== bound);
+        warn.hidden = !mismatch;
+        warn.classList.toggle("visible", mismatch);
+        warn.textContent = mismatch
+          ? `Runtime bound to different project — click Sync or reopen project`
+          : "";
+        if (mismatch) warn.onclick = () => syncRuntime("bind mismatch").catch((e) => logEvent(e.message, "alarm"));
+      }
+      updateStatusChips();
     } catch (_) { /* ignore */ }
     if (workspaceMode === "diagnostic") refreshLogicStatus().catch(() => {});
   }
@@ -751,6 +981,7 @@
       setSelection([node.id], node.id);
     }
     studio.classList.add("show-inspector");
+    studio.classList.remove("collapsed-insp");
     if (xrayMode || inspTab === "xray" || workspaceMode === "diagnostic") {
       inspTab = "xray";
       syncInspTabs();
@@ -759,6 +990,11 @@
         renderInspector();
       });
     } else {
+      // Prefer engineering edit surface when selecting on Design / Simulate canvas
+      if (workspace === "design" && inspTab !== "overview" && inspTab !== "control") {
+        inspTab = "overview";
+        syncInspTabs();
+      }
       renderInspector();
     }
   }
@@ -775,7 +1011,7 @@
           <path fill="currentColor" d="M8 1.5a2.75 2.75 0 0 0-2.75 2.75V6H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 6h-.75V4.25A2.75 2.75 0 0 0 8 1.5zm1.25 4.5h-2.5V4.25a1.25 1.25 0 1 1 2.5 0V6zM8 9.25a.9.9 0 0 1 .9.9v1.2a.9.9 0 1 1-1.8 0v-1.2a.9.9 0 0 1 .9-.9z"/>
         </svg>
       </span>
-      <span class="badge" hidden>!</span>
+      <span class="badge" hidden title="" aria-label="Alarm">!</span>
       <div class="tankFill" hidden></div>
       <div class="sym"></div>
       <h3></h3>
@@ -838,8 +1074,8 @@
   function patchNodeEl(el, node) {
     ensureIlkCornerEl(el, node);
     const st = statusClass(node);
-    const w = node.w || 140;
-    const h = node.h || 80;
+    const w = node.w || 168;
+    const h = node.h || 98;
     const xrayHit = (xrayMode || workspaceMode === "diagnostic") && (xrayData?.highlightEquipmentIds || []).includes(node.id);
     const ilkHit = ilkHighlightIds.has(node.id);
     const draggingThis = (drag && (drag.id === node.id || drag.ids?.includes(node.id))) || resize?.id === node.id;
@@ -850,6 +1086,7 @@
       (xrayHit ? " xrayHit" : "") +
       (ilkHit ? (ilkHighlightActive ? " ilkHit" : " ilkHit clearHit") : "") +
       (workspaceMode === "engineering" ? " engMode" : "") +
+      (symbolMode === "scada" ? " scadaSym" : " pidSym") +
       (isUnverified(node) ? " unverified" : "") +
       (node.locked ? " locked" : "");
     el.style.display = nodeLayerVisible(node) ? "" : "none";
@@ -862,7 +1099,12 @@
     const rot = Number(node.r) || 0;
     el.style.transform = rot ? `rotate(${rot}deg)` : "";
     const badge = el.querySelector(".badge");
-    if (badge) badge.hidden = st !== "alarm";
+    if (badge) {
+      const reason = st === "alarm" ? alarmBadgeReason(node) : null;
+      badge.hidden = !reason;
+      badge.title = reason || "";
+      badge.setAttribute("aria-label", reason || "Alarm");
+    }
     const ilkCorner = el.querySelector(".ilkCorner");
     if (ilkCorner) {
       const mode = ilkCornerByEq.get(node.id); // "active" | "armed" | undefined
@@ -879,11 +1121,13 @@
         ilkCorner.classList.remove("active", "armed");
       }
     }
-    const isTank = /tank/i.test(node.type);
+    const isTank = /tank|vessel/i.test(node.type);
     const fill = el.querySelector(".tankFill");
     if (fill) {
-      fill.hidden = !isTank;
-      if (isTank) {
+      // SCADA tank SVG draws level; keep CSS fill only as P&ID fallback aid
+      const useCssFill = isTank && symbolMode === "pid";
+      fill.hidden = !useCssFill;
+      if (useCssFill) {
         const target = tankLevelPct(node);
         if (!displayLevels.has(node.id)) displayLevels.set(node.id, target);
         const shown = displayLevels.get(node.id);
@@ -892,21 +1136,33 @@
     }
     const running = isActuallyRunning(node);
     const vState = /valve/i.test(node.type) ? valveVisualState(node) : "";
+    const lvl = isTank ? Math.round(tankLevelPct(node)) : "";
     const sym = el.querySelector(".sym");
-    const symKey = `${node.type}|${running}|${vState}|${st}`;
+    const symKey = `${symbolMode}|${node.type}|${running}|${vState}|${st}|${lvl}`;
     if (sym && el.dataset.symKey !== symKey) {
-      sym.innerHTML = symbolSvg(node.type, running, vState);
+      const liveForSym = { ...(node.live || {}) };
+      if (isTank && liveForSym && !Object.keys(liveForSym).some((k) => /Level/i.test(k))) {
+        liveForSym.LevelPct = tankLevelPct(node);
+      }
+      sym.innerHTML = symbolSvg(node.type, running, vState, liveForSym);
       el.dataset.symKey = symKey;
     }
+    syncPortAnchors(el, node);
     const h3 = el.querySelector("h3");
     if (h3 && h3.textContent !== node.tag) h3.textContent = node.tag;
     const typeEl = el.querySelector(".type");
     const stateLabel = st === "alarm" ? "alarm" : running ? "running" : vState || st || "stopped";
-    const typeTxt = `${node.type} · ${stateLabel}`;
-    if (typeEl && typeEl.textContent !== typeTxt) typeEl.textContent = typeTxt;
+    const typeName = String(node.type || "equipment");
+    const typeHtml = `${esc(typeName)}<span class="st">${esc(stateLabel)}</span>`;
+    if (typeEl && typeEl.dataset.full !== `${typeName}|${stateLabel}`) {
+      typeEl.dataset.full = `${typeName}|${stateLabel}`;
+      typeEl.innerHTML = typeHtml;
+    }
     const liveEl = el.querySelector(".liveLine");
     const liveTxt = nodeLiveText(node);
     if (liveEl && liveEl.textContent !== liveTxt) liveEl.textContent = liveTxt;
+    const tip = `${node.tag} · ${typeName} · ${stateLabel}${liveTxt ? ` · ${liveTxt}` : ""}`;
+    if (el.title !== tip) el.title = tip;
   }
 
   function ensureLinkEl(link) {
@@ -947,29 +1203,41 @@
       return;
     }
     path.style.display = "";
-    const aw = a.w || 140;
-    const ah = a.h || 80;
-    const bw = b.w || 140;
-    const bh = b.h || 80;
-    const x1 = a.x + aw / 2;
-    const y1 = a.y + ah / 2;
-    const x2 = b.x + bw / 2;
-    const y2 = b.y + bh / 2;
+    let x1 = a.x + (a.w || 140) / 2;
+    let y1 = a.y + (a.h || 80) / 2;
+    let x2 = b.x + (b.w || 140) / 2;
+    let y2 = b.y + (b.h || 80) / 2;
+    let invalid = !!link.invalid;
+    if (window.P6Symbols?.linkEndpoints) {
+      const ep = window.P6Symbols.linkEndpoints(link, a, b);
+      x1 = ep.x1;
+      y1 = ep.y1;
+      x2 = ep.x2;
+      y2 = ep.y2;
+      invalid = !!ep.invalid || invalid;
+    }
     path.setAttribute("d", orthoPath(x1, y1, x2, y2, link.waypoints));
     // Flow animation only when hydraulically supported (pump/motor actually running)
-    const flowing = isActuallyRunning(a) || isActuallyRunning(b);
+    const flowing = !invalid && (isActuallyRunning(a) || isActuallyRunning(b));
     const gpm = processFlowGpm(lastCanvas);
     const intensity = flowing ? Math.max(0.25, Math.min(1, gpm / 50)) : 0;
     const xrayLinks = new Set(xrayData?.highlightConnectionIds || []);
     const kind = String(link.type || "process").toLowerCase();
     let stroke = flowing ? `rgba(34,197,94,${0.45 + intensity * 0.5})` : "rgba(40,197,255,0.4)";
-    if (!flowing) {
-      if (kind === "mechanical" || kind === "electrical") stroke = "rgba(245,158,11,0.55)";
-      else if (kind === "signal" || kind === "instrumentation" || kind === "control") stroke = "rgba(168,85,247,0.55)";
-      else if (kind === "communication") stroke = "rgba(148,163,184,0.55)";
+    if (invalid) stroke = "rgba(239,68,68,0.85)";
+    else if (!flowing) {
+      if (kind === "mechanical") stroke = "rgba(245,158,11,0.7)";
+      else if (kind === "electrical") stroke = "rgba(250,204,21,0.75)";
+      else if (kind === "signal" || kind === "instrument" || kind === "instrumentation" || kind === "control") {
+        stroke = "rgba(168,85,247,0.65)";
+      } else if (kind === "communication") stroke = "rgba(148,163,184,0.55)";
+      else stroke = "rgba(40,197,255,0.55)"; // process
     }
     path.setAttribute("stroke", stroke);
-    path.setAttribute("stroke-width", flowing ? String(2 + intensity * 2.5) : "2.5");
+    path.setAttribute("stroke-width", flowing ? String(2 + intensity * 2.5) : invalid ? "2.5" : "2.5");
+    if (invalid) path.setAttribute("stroke-dasharray", "6 4");
+    else if (kind === "signal" || kind === "instrument" || kind === "control") path.setAttribute("stroke-dasharray", "4 3");
+    else path.removeAttribute("stroke-dasharray");
     path.setAttribute("stroke-linecap", "round");
     path.setAttribute("stroke-linejoin", "round");
     if (flowing && motionEnabled) {
@@ -977,6 +1245,8 @@
     } else {
       path.style.animationDuration = "";
     }
+    path.classList.toggle("linkInvalid", invalid);
+    path.dataset.connKind = kind;
     path.classList.toggle("flowPulse", flowing && motionEnabled && workspaceMode !== "engineering");
     path.classList.toggle("xrayLink", (xrayMode || workspaceMode === "diagnostic") && xrayLinks.has(link.id));
     path.classList.toggle("linkSelected", selectedLinkId === link.id);
@@ -1235,17 +1505,36 @@
       return;
     }
     try {
+      const connectionType = document.getElementById("connectKind")?.value || "process";
+      let fromPortId = null;
+      let toPortId = null;
+      let invalid = false;
+      if (window.P6Symbols?.pickPorts) {
+        const pick = window.P6Symbols.pickPorts(connectFrom, node, connectionType);
+        fromPortId = pick.fromPortId;
+        toPortId = pick.toPortId;
+        invalid = !pick.valid;
+        if (invalid && pick.reason) logEvent(`Port warning: ${pick.reason}`, "alarm");
+      }
       await api(`/api/model/projects/${projectId}/connections`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fromEquipmentId: connectFrom.id,
           toEquipmentId: node.id,
-          connectionType: "process",
-          description: `${connectFrom.tag} → ${node.tag}`
+          connectionType,
+          fromPortId,
+          toPortId,
+          invalid,
+          description: `${connectFrom.tag} → ${node.tag} (${connectionType})`
         })
       });
-      logEvent(`Connected ${connectFrom.tag} → ${node.tag}`, "ok");
+      logEvent(
+        `Connected ${connectFrom.tag} → ${node.tag}` +
+          (fromPortId && toPortId ? ` · ${fromPortId}→${toPortId}` : "") +
+          (invalid ? " · INVALID PORTS" : ""),
+        invalid ? "alarm" : "ok"
+      );
       connectFrom = null;
       document.getElementById("modeHint").textContent = "connect mode · click source then target";
       await syncRuntime("connection created");
@@ -1630,7 +1919,7 @@
       setWorkspace("verify");
     });
     document.getElementById("btnOpenIlkFromXray")?.addEventListener("click", () => {
-      setWorkspace("logic", { equipmentId: selected?.id });
+      setWorkspace("engineer", { openInterlocks: true, equipmentId: selected?.id });
     });
     document.getElementById("btnRefreshXray").onclick = async () => {
       if (selected) {
@@ -1690,8 +1979,14 @@
     if (ev.button !== 0) return;
     ev.stopPropagation();
     hideCtxMenu();
-    if (node.locked && ev.target?.dataset?.resize !== "1") {
-      // Allow select/click but not drag when locked
+    if ((node.locked || dragLock) && ev.target?.dataset?.resize !== "1") {
+      // Allow select/click but not drag when locked / drag-lock
+      if (!selectedIds.has(node.id) && !(ev.ctrlKey || ev.metaKey)) {
+        setSelection([node.id], node.id);
+      } else if (!selectedIds.has(node.id)) {
+        selectedIds.add(node.id);
+        setSelection([...selectedIds], node.id);
+      }
       return;
     }
     if (ev.target?.dataset?.resize === "1") {
@@ -1788,9 +2083,14 @@
       return;
     }
     if (drag) {
-      let dx = (ev.clientX - drag.startX) / scale;
-      let dy = (ev.clientY - drag.startY) / scale;
-      if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+      if (dragLock || drag.locked) return;
+      const rawDx = (ev.clientX - drag.startX) / scale;
+      const rawDy = (ev.clientY - drag.startY) / scale;
+      const distPx = Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY);
+      if (!drag.moved && distPx < DRAG_THRESHOLD_PX) return;
+      drag.moved = true;
+      let dx = rawDx;
+      let dy = rawDy;
       const moving = new Set(drag.ids);
       const probes = drag.ids.map((id) => {
         const o = drag.origins[id];
@@ -1813,15 +2113,13 @@
         if (el) {
           el.style.left = nx + "px";
           el.style.top = ny + "px";
-          if (drag.moved) el.dataset.dragged = "1";
+          el.dataset.dragged = "1";
         }
       }
-      if (drag.moved) {
-        layoutDirty = true;
-        setSavePill("dirty");
-        redrawLinksOnly();
-        scheduleMinimap();
-      }
+      layoutDirty = true;
+      setSavePill("dirty");
+      redrawLinksOnly();
+      scheduleMinimap();
       return;
     }
     if (panDrag) {
@@ -1949,6 +2247,56 @@
     }
   }
 
+  function autosaveKey() {
+    return projectId ? `p6.studio.layout.${projectId}` : null;
+  }
+
+  function persistAutosaveDraft() {
+    const key = autosaveKey();
+    if (!key || !lastCanvas || !layoutDirty) return;
+    try {
+      const nodes = {};
+      for (const n of lastCanvas.nodes || []) {
+        nodes[n.id] = { x: n.x, y: n.y, w: n.w, h: n.h, r: n.r || 0, locked: !!n.locked };
+      }
+      localStorage.setItem(key, JSON.stringify({ at: Date.now(), nodes }));
+    } catch (_) { /* quota */ }
+  }
+
+  function tryRestoreAutosave() {
+    const key = autosaveKey();
+    if (!key || !lastCanvas) return;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (!draft?.nodes || Date.now() - (draft.at || 0) > 1000 * 60 * 60 * 24) {
+        localStorage.removeItem(key);
+        return;
+      }
+      const serverUpdated = Date.parse(lastCanvas.graphUpdatedAt || 0) || 0;
+      if (serverUpdated && draft.at < serverUpdated) {
+        localStorage.removeItem(key);
+        return;
+      }
+      if (!confirm("Recover unsaved canvas layout from a previous session?")) {
+        localStorage.removeItem(key);
+        return;
+      }
+      const before = captureLayout();
+      for (const n of lastCanvas.nodes || []) {
+        const d = draft.nodes[n.id];
+        if (!d) continue;
+        n.x = d.x; n.y = d.y; n.w = d.w; n.h = d.h; n.r = d.r; n.locked = !!d.locked;
+      }
+      if (before) pushUndo(before);
+      layoutDirty = true;
+      setSavePill("dirty");
+      syncCanvas(lastCanvas);
+      logEvent("Recovered unsaved layout draft — Save to persist", "ok");
+    } catch (_) { /* ignore */ }
+  }
+
   async function saveLayout() {
     if (!projectId || !lastCanvas) return;
     const nodes = {};
@@ -1962,8 +2310,121 @@
     });
     layoutDirty = false;
     setSavePill("saved");
+    try {
+      const key = autosaveKey();
+      if (key) localStorage.removeItem(key);
+    } catch (_) { /* ignore */ }
     logEvent(`Layout saved (model v${r.modelVersion})`, "ok");
     await refreshProject();
+  }
+
+  function mirrorSelection() {
+    if (!selectedIds.size || !lastCanvas) return;
+    const before = captureLayout();
+    const nodes = [...selectedIds].map((id) => lastCanvas.nodes.find((x) => x.id === id)).filter(Boolean);
+    if (!nodes.length) return;
+    const minX = Math.min(...nodes.map((n) => n.x));
+    const maxX = Math.max(...nodes.map((n) => n.x + (n.w || 140)));
+    const mid = (minX + maxX) / 2;
+    for (const n of nodes) {
+      const w = n.w || 140;
+      n.x = snapVal(mid - ((n.x + w) - mid));
+      n.r = (((-(Number(n.r) || 0)) % 360) + 360) % 360;
+      const el = nodeEls.get(n.id);
+      if (el) {
+        el.style.left = n.x + "px";
+        el.style.transform = n.r ? `rotate(${n.r}deg)` : "";
+      }
+    }
+    pushUndo(before);
+    layoutDirty = true;
+    setSavePill("dirty");
+    redrawLinksOnly();
+    logEvent("Mirrored selection", "ok");
+  }
+
+  function autoLayoutSelection() {
+    if (!lastCanvas?.nodes?.length) return;
+    const before = captureLayout();
+    const ids = selectedIds.size ? [...selectedIds] : lastCanvas.nodes.map((n) => n.id);
+    const cols = Math.max(2, Math.ceil(Math.sqrt(ids.length)));
+    ids.forEach((id, i) => {
+      const n = lastCanvas.nodes.find((x) => x.id === id);
+      if (!n || n.locked) return;
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      n.x = snapVal(80 + col * 220);
+      n.y = snapVal(60 + row * 150);
+      const el = nodeEls.get(id);
+      if (el) {
+        el.style.left = n.x + "px";
+        el.style.top = n.y + "px";
+      }
+    });
+    pushUndo(before);
+    layoutDirty = true;
+    setSavePill("dirty");
+    redrawLinksOnly();
+    fitViewSoon(2, { force: true });
+    logEvent(`Auto-layout applied to ${ids.length} equipment`, "ok");
+  }
+
+  async function saveProjectAs() {
+    if (!projectId) return;
+    const name = prompt("Save As — new project name:", (document.getElementById("projectName")?.textContent || "Project") + " copy");
+    if (!name?.trim()) return;
+    if (layoutDirty) await saveLayout().catch(() => {});
+    const active = await api("/api/model/projects/active");
+    const src = active.project;
+    if (!src) throw new Error("No active project");
+    const created = await api("/api/model/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), description: src.description || "" })
+    });
+    const newId = created.project?.id;
+    if (!newId) throw new Error("Save As failed — no project id");
+    const clone = JSON.parse(JSON.stringify(src));
+    clone.id = newId;
+    clone.name = name.trim();
+    clone.description = src.description || "";
+    delete clone.meta?.samplePlant;
+    await api(`/api/model/projects/${newId}/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: clone })
+    });
+    await api("/api/model/projects/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: newId })
+    });
+    await syncRuntime("save as");
+    await refreshProject();
+    await refreshProjectList();
+    logEvent(`Saved As “${name.trim()}”`, "ok");
+    setWorkspace("design");
+  }
+
+  async function exportEngineeringPackage() {
+    if (!projectId) return;
+    setWorkspace("verify");
+    const [summary, eng] = await Promise.all([
+      api(`/api/model/projects/${projectId}/summary`).catch(() => ({})),
+      api("/api/connect/engineering/status").catch(() => ({}))
+    ]);
+    const blob = new Blob(
+      [JSON.stringify({ exportedAt: new Date().toISOString(), summary, engineering: eng, projectId }, null, 2)],
+      { type: "application/json" }
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `p6-export-${projectId}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    logEvent("Exported engineering package JSON (summary + gate status)", "ok");
+    lastVerifyChip = "export";
+    updateStatusChips();
   }
 
   function fitNodes(nodes, { force = false } = {}) {
@@ -2075,8 +2536,10 @@
       }
     } catch (e) {
       const reasons = e.data?.reasons || [];
-      logEvent(`CMD REJECTED ${tag}: ${reasons.join(" | ") || e.message}`, "alarm");
-      renderInspector(reasons);
+      const plain = engineerExplain(tag, reasons, e.message);
+      logEvent(plain, "alarm");
+      pushAlarm(plain, { severity: "high" });
+      renderInspector([plain]);
     }
   }
 
@@ -2098,7 +2561,7 @@
       }
     }
     if (/estop|emergency|esd/i.test(node.type) || tags.some((t) => /ESTOP|ESD/i.test(t))) {
-      const healthy = tags.find((t) => /Healthy/i.test(t)) || "ESD-101.Healthy";
+      const healthy = tags.find((t) => /Healthy/i.test(t)) || "ESTOP101.Healthy";
       cmds.push({ label: "Activate E-stop (sim)", tag: healthy, value: false });
       cmds.push({ label: "Clear E-stop (sim)", tag: healthy, value: true });
       cmds.push({ label: "Reset trip", tag: "System.Reset", pulse: true });
@@ -2153,12 +2616,13 @@
         : "";
       body.innerHTML = `${rejectHtml}
         <div class="propGrid">
-          <label>Tag<input type="text" id="propTag" value="${esc(selected.tag)}" /></label>
+          <label>Tag<input type="text" id="propTag" value="${esc(selected.tag)}" autocomplete="off" /></label>
           <label>Type<select id="propType">${typeOpts}<option value="${esc(selected.type)}">${esc(selected.type)}</option></select></label>
         </div>
+        <label class="propFull">Description<textarea id="propDesc" rows="2" placeholder="Engineering description">${esc(selected.description || "")}</textarea></label>
         <div class="cmdRow">
-          <button type="button" id="btnSaveIdentity">Save tag / type</button>
-          <button type="button" id="btnApproveEq">Add approved equipment</button>
+          <button type="button" id="btnSaveIdentity">Save tag / type / description</button>
+          <button type="button" id="btnApproveEq">Mark approved</button>
           <button type="button" id="btnDeleteEq">Delete equipment</button>
         </div>
         ${tankForm}
@@ -2168,13 +2632,14 @@
           <dt>Live signals</dt><dd>${Object.keys(live).length} on this equipment</dd>
         </dl>
         <details class="advDetails"><summary>Advanced (model record)</summary><pre class="mono">${esc(JSON.stringify({
-        tag: selected.tag, type: selected.type, dataClass: selected.dataClass, operatingState: selected.operatingState, properties: props
+        tag: selected.tag, type: selected.type, description: selected.description, dataClass: selected.dataClass, operatingState: selected.operatingState, properties: props
       }, null, 2))}</pre></details>
         <p class="warn">Edits update the simulation model and rebind Runtime automatically. Simulated controls only — not certified physical safety.</p>`;
       document.getElementById("btnSaveIdentity").onclick = () => {
         reworkEquipment(selected, {
           tag: document.getElementById("propTag").value,
-          type: document.getElementById("propType").value
+          type: document.getElementById("propType").value,
+          description: document.getElementById("propDesc")?.value ?? ""
         }).catch((e) => logEvent(e.message, "alarm"));
       };
       document.getElementById("btnApproveEq").onclick = () => {
@@ -2201,7 +2666,7 @@
         <p class="muted">Logic observability from Runtime · selection preserved across workspace tabs.</p>
         <button type="button" id="btnOpenIlkFromLogic">Open interlocks workspace</button>`;
       document.getElementById("btnOpenIlkFromLogic")?.addEventListener("click", () => {
-        setWorkspace("logic", { equipmentId: selected?.id });
+        setWorkspace("engineer", { openInterlocks: true, equipmentId: selected?.id });
       });
       refreshLogicStatus().then(() => {
         if (inspTab === "logic" && selected) renderInspector();
@@ -2318,17 +2783,29 @@
     } catch (_) { /* optional */ }
   }
 
-  function appendVerifyResult({ testName, testId, pass, assertions, error }) {
+  function appendVerifyResult({ testName, testId, pass, status, assertions, error, failureExplain, raw }) {
     const verifyLog = document.getElementById("verifyLog");
     if (!verifyLog) return;
     const wrap = document.createElement("div");
+    const st = status || (pass ? "PASS" : "FAIL");
     const html = window.P6VerifyUI
-      ? P6VerifyUI.renderVerifyRunRow({ testName, testId, pass, assertions, error })
-      : `<div class="verifyRow ${pass ? "ok" : "alarm"}">${esc(testName || testId)} ${pass ? "PASS" : "FAIL"}</div>`;
+      ? P6VerifyUI.renderVerifyRunRow({
+          testName,
+          testId,
+          pass: st === "PASS",
+          status: st,
+          assertions,
+          error,
+          failureExplain,
+          raw
+        })
+      : `<div class="verifyRow ${st === "PASS" ? "ok" : "alarm"}">${esc(testName || testId)} ${esc(st)}</div>`;
     wrap.innerHTML = html;
     verifyLog.prepend(wrap.firstElementChild);
     const wsLog = document.getElementById("verifyWorkspaceLog");
     if (wsLog) wsLog.prepend(wrap.firstElementChild.cloneNode(true));
+    lastVerifyChip = st;
+    updateStatusChips();
     document.querySelector('[data-actab="verify"]')?.click();
     document.getElementById("console")?.classList.remove("collapsed");
   }
@@ -2349,14 +2826,24 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ testId: id })
       });
-      const pass = !!(r.pass || r.result?.pass);
+      const status = r.status || r.result?.status || (r.pass ? "PASS" : "FAIL");
+      const pass = status === "PASS";
       const assertions = r.result?.assertions || r.assertions || [];
-      const line = `${testName} ${pass ? "PASS" : "FAIL"}`;
-      logEvent(line, pass ? "ok" : "alarm");
-      appendVerifyResult({ testName, testId: id, pass, assertions });
+      const explain = r.result?.failureExplain || r.result?.blockReason || null;
+      const line = `${testName} ${status}` + (explain ? ` — ${explain}` : "");
+      logEvent(line, pass ? "ok" : status === "BLOCKED" ? "warn" : "alarm");
+      appendVerifyResult({
+        testName,
+        testId: id,
+        pass,
+        status,
+        assertions,
+        failureExplain: explain,
+        raw: r
+      });
     } catch (e) {
       logEvent("Run Test error: " + e.message, "alarm");
-      appendVerifyResult({ testName, testId: id, pass: false, error: e.message });
+      appendVerifyResult({ testName, testId: id, pass: false, status: "NOT_RUN", error: e.message });
     }
   }
 
@@ -2403,6 +2890,7 @@
   function hideAllWorkspacePanels() {
     connectPanel?.classList.add("hidden");
     document.getElementById("interlocksPanel")?.classList.add("hidden");
+    document.getElementById("engineerPanel")?.classList.add("hidden");
     document.getElementById("ingestPanel")?.classList.add("hidden");
     ioPanelPanel?.classList.add("hidden");
     verifyWorkspacePanel?.classList.add("hidden");
@@ -2410,9 +2898,16 @@
     if (toolFrame && toolFrame.src && toolFrame.src !== "about:blank") toolFrame.src = "about:blank";
   }
 
-  /** Five workspace categories only — selection + project model persist. */
+  /** Normalize legacy workspace ids (logic/io → engineer). Selection + project persist. */
+  function normalizeWorkspace(ws) {
+    if (ws === "logic" || ws === "io") return "engineer";
+    if (["design", "engineer", "simulate", "verify"].includes(ws)) return ws;
+    return "design";
+  }
+
+  /** Four workspace categories only — selection + project model persist. */
   function setWorkspace(ws, opts = {}) {
-    const next = ["design", "logic", "io", "simulate", "verify"].includes(ws) ? ws : "design";
+    const next = normalizeWorkspace(ws);
     workspace = next;
     studio.setAttribute("data-workspace", next);
     document.querySelectorAll(".wsTab").forEach((b) => {
@@ -2427,17 +2922,15 @@
     hideAllWorkspacePanels();
     const titles = {
       design: "Design",
-      logic: "Logic",
-      io: "I/O",
+      engineer: "Engineer",
       simulate: "Simulate",
-      verify: "Verify"
+      verify: "Verify & Export"
     };
     const hints = {
-      design: "place · connect · configure · Import P&ID",
-      logic: "interlocks · conditions · inhibits · selection focused",
-      io: "live Runtime signals · filter by selection",
-      simulate: "run · scenarios · X-Ray · watch process",
-      verify: "FAT catalog · assertion evidence"
+      design: "place · connect · library · Import Drawing",
+      engineer: "configure · signals · interlocks · codegen · selection preserved",
+      simulate: "run · scenarios · X-Ray · process viz",
+      verify: "FAT catalog · snapshot · export package"
     };
     document.getElementById("viewTitle").textContent = titles[next];
     document.getElementById("modeHint").textContent = hints[next];
@@ -2447,6 +2940,13 @@
       viewport.classList.remove("hidden");
       viewport.style.display = "";
       setWorkspaceMode("engineering", { silent: true });
+      if (!symbolModeUserOverride) setSymbolMode("pid", { silent: true });
+      if (!opts.openIngest && !opts.openConnect) {
+        inspTab = "overview";
+        syncInspTabs();
+        studio.classList.add("show-inspector");
+        if (selected) renderInspector();
+      }
       if (opts.openIngest) openIngestPanel({ stayInWorkspace: true });
       if (opts.openConnect) {
         view = "connect";
@@ -2454,42 +2954,74 @@
         connectPanel.classList.remove("hidden");
         refreshConnect().catch((e) => logEvent(String(e.message), "alarm"));
       }
-    } else if (next === "logic") {
-      view = "interlocks";
-      viewport.classList.add("hidden");
-      setWorkspaceMode("diagnostic", { silent: true });
-      openInterlocksPanel({
-        equipmentId: opts.equipmentId || selected?.id,
-        selectId: opts.selectId,
-        stayInWorkspace: true
-      });
-      if (selected) {
-        inspTab = "interlocks";
-        [...document.getElementById("inspTabs").querySelectorAll("button")].forEach((x) =>
-          x.classList.toggle("active", x.dataset.tab === "interlocks")
-        );
-        renderInspector();
-      }
-    } else if (next === "io") {
-      view = "io";
-      viewport.classList.add("hidden");
+    } else if (next === "engineer") {
+      view = "map";
+      viewport.classList.remove("hidden");
+      viewport.style.display = "";
       setWorkspaceMode("engineering", { silent: true });
-      ioWorkspacePanel?.classList.remove("hidden");
-      refreshIoPanel().catch((e) => logEvent(e.message, "alarm"));
-      if (selected) {
+      if (!symbolModeUserOverride) setSymbolMode("pid", { silent: true });
+      studio.classList.add("show-inspector");
+      if (opts.openEngineer || opts.panel === "engineer") {
+        openEngineerPanel({ stayInWorkspace: true });
+        inspTab = "logic";
+        document.getElementById("advEngineering")?.setAttribute("open", "");
+      } else if (opts.openInterlocks || opts.panel === "interlocks") {
+        openInterlocksPanel({
+          equipmentId: opts.equipmentId || selected?.id,
+          selectId: opts.selectId,
+          stayInWorkspace: true
+        });
+        inspTab = "interlocks";
+      } else if (opts.openIo || opts.panel === "io" || ws === "io") {
+        view = "io";
+        viewport.classList.add("hidden");
+        ioPanelPanel?.classList.remove("hidden");
+        refreshIoPanel().catch((e) => logEvent(e.message, "alarm"));
         inspTab = "io";
-        [...document.getElementById("inspTabs").querySelectorAll("button")].forEach((x) =>
-          x.classList.toggle("active", x.dataset.tab === "io")
-        );
-        renderInspector();
+        document.getElementById("viewTitle").textContent = "Engineer · I/O map";
+      } else if (opts.panel === "logic") {
+        inspTab = "logic";
+        document.getElementById("advEngineering")?.setAttribute("open", "");
+      } else if (selected) {
+        if (!["overview", "control", "io", "interlocks"].includes(inspTab)) inspTab = "overview";
+      } else {
+        inspTab = "overview";
       }
+      syncInspTabs();
+      if (selected) renderInspector();
+      else if (inspTab === "logic") renderInspectorEmptyLogic();
     } else if (next === "simulate") {
       view = "map";
       viewport.classList.remove("hidden");
       viewport.style.display = "";
       setWorkspaceMode("simulation", { silent: true });
-      if (opts.xray === true) setXrayMode(true);
-      else if (opts.xray === false) setXrayMode(false);
+      if (!symbolModeUserOverride) setSymbolMode("scada", { silent: true });
+      // Focus the P&ID: collapse events drawer + side library; inspector only if something selected / X-Ray
+      document.getElementById("console")?.classList.add("collapsed");
+      const expandBtn = document.getElementById("btnToggleConsole");
+      if (expandBtn) expandBtn.textContent = "Expand";
+      studio.classList.add("collapsed-side");
+      hideAllWorkspacePanels();
+      if (opts.xray === true) {
+        setXrayMode(true);
+        studio.classList.add("show-inspector");
+        studio.classList.remove("collapsed-insp");
+      } else {
+        if (opts.xray === false) setXrayMode(false);
+        if (inspTab === "interlocks" || inspTab === "io" || inspTab === "logic" || inspTab === "xray") {
+          inspTab = "overview";
+          syncInspTabs();
+        }
+        if (selected) {
+          studio.classList.add("show-inspector");
+          studio.classList.remove("collapsed-insp");
+          if (!xrayMode) renderInspector();
+        } else {
+          studio.classList.add("collapsed-insp");
+          studio.classList.remove("show-inspector");
+        }
+      }
+      userViewLocked = false;
     } else if (next === "verify") {
       view = "verify";
       viewport.classList.add("hidden");
@@ -2501,7 +3033,7 @@
     document.querySelectorAll(".navItem[data-view]").forEach((el) => {
       el.classList.toggle("active", el.getAttribute("data-view") === view);
     });
-    if (!userViewLocked && (next === "design" || next === "simulate")) fitViewSoon(2);
+    if (!userViewLocked && (next === "design" || next === "engineer" || next === "simulate")) fitViewSoon(2);
   }
 
   function setView(v) {
@@ -2520,8 +3052,8 @@
     // Nested full-app iframes removed — fold into workspace or open standalone honestly.
     logEvent(`${title || url}: open from landing / dedicated page (not embedded in Studio)`, "ok");
     if (url && /verify/i.test(url)) setWorkspace("verify");
-    else if (url && /interlock/i.test(url)) setWorkspace("logic");
-    else if (url && /monitor|tag/i.test(url)) setWorkspace("io");
+    else if (url && /interlock/i.test(url)) setWorkspace("engineer", { openInterlocks: true });
+    else if (url && /monitor|tag/i.test(url)) setWorkspace("engineer", { openIo: true });
     else if (url && /ingest|pid/i.test(url)) setWorkspace("design", { openIngest: true });
     else if (url && /connect/i.test(url)) setWorkspace("design", { openConnect: true });
   }
@@ -2572,27 +3104,68 @@
     const host = document.getElementById("verifyCatalog");
     if (!host) return;
     try {
-      const tests = window.P6VerifyUI
-        ? await P6VerifyUI.fetchCatalog()
-        : (await api("/api/verify/tests")).tests || [];
+      const cat = await api("/api/verify/tests");
+      const tests = cat.tests || [];
       if (!tests.length) {
         host.innerHTML = `<p class="muted">No FAT tests in catalog.</p>`;
         return;
       }
-      host.innerHTML = tests
-        .map(
-          (t) => `<div class="verifyTest">
-            <div><b>${esc(t.name || t.id)}</b><div class="muted">${esc(t.description || t.id)}</div></div>
-            <button type="button" data-fat="${esc(t.id)}">Run</button>
-          </div>`
-        )
+      const limitsHtml = (cat.limits || [])
+        .map((l) => `<li class="muted">${esc(l)}</li>`)
         .join("");
-      const limits = tests.flatMap?.((t) => t.limits || []) || [];
-      if (!limits.length) {
-        /* catalog may expose limits at top level via API */
-      }
+      host.innerHTML =
+        `<p class="warn">VIRTUAL evidence only · status PASS/FAIL/BLOCKED/NOT RUN from Runtime</p>` +
+        tests
+          .map((t) => {
+            const exec = t.executable !== false;
+            return `<div class="verifyTest">
+            <div><b>${esc(t.name || t.id)}</b>
+              <span class="muted">${esc(t.requirementRef || "")}</span>
+              <div class="muted">${esc(t.description || t.id)}</div>
+              ${!exec ? `<div class="warn">BLOCKED — ${esc(t.blockReason || "not executable")}</div>` : ""}
+            </div>
+            <button type="button" data-fat="${esc(t.id)}">${exec ? "Run" : "Record BLOCKED"}</button>
+          </div>`;
+          })
+          .join("") +
+        (limitsHtml ? `<ul class="condList">${limitsHtml}</ul>` : "") +
+        `<div class="cmdRow">
+          <button type="button" id="btnVerifySuite">Run executable suite</button>
+          <button type="button" id="btnVerifyPkg">Download package (preview)</button>
+        </div>`;
       host.querySelectorAll("[data-fat]").forEach((btn) => {
         btn.onclick = () => runFat(btn.getAttribute("data-fat")).catch((e) => logEvent(e.message, "alarm"));
+      });
+      document.getElementById("btnVerifySuite")?.addEventListener("click", async () => {
+        try {
+          const r = await api("/api/verify/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ suite: true })
+          });
+          const s = r.summary || {};
+          logEvent(
+            `Verify suite: ${s.passed || 0} PASS · ${s.failed || 0} FAIL · ${s.blocked || 0} BLOCKED · ${s.notRun || 0} NOT RUN`,
+            s.failed ? "alarm" : "ok"
+          );
+          for (const result of r.results || []) {
+            appendVerifyResult({
+              testName: result.testName || result.testId,
+              testId: result.testId,
+              pass: result.status === "PASS",
+              status: result.status,
+              assertions: result.assertions || [],
+              failureExplain: result.failureExplain || result.blockReason,
+              raw: result
+            });
+          }
+        } catch (e) {
+          logEvent(e.message, "alarm");
+        }
+      });
+      document.getElementById("btnVerifyPkg")?.addEventListener("click", () => {
+        window.open("/api/exports/package/download?forcePreview=1", "_blank");
+        logEvent("Engineering package preview download started (VIRTUAL · not physical FAT)", "ok");
       });
     } catch (e) {
       host.innerHTML = `<p class="warn">${esc(e.message)}</p>`;
@@ -2691,22 +3264,41 @@
     document.getElementById("console")?.classList.remove("collapsed");
   }
 
+  /** Resolve live tags for tank-transfer OR water-transfer demos. */
+  async function resolvePlantTags() {
+    const d = await api("/api/runtime/signals");
+    const tags = (d.signals || []).map((s) => s.tag);
+    const pick = (...cands) => cands.find((t) => tags.includes(t)) || cands[0];
+    return {
+      tags,
+      estop: pick("ESTOP101.Healthy", "ESD-101.Healthy", "ESD101.Healthy"),
+      high: pick("LSH101.High", "LT-101.High", "LSH-101.High"),
+      valveOpen: pick("XV101.OpenCommand", "VALVE-101.OpenCommand", "XV-101.OpenCommand"),
+      start: "System.Start",
+      reset: "System.Reset"
+    };
+  }
+
   async function runScenario(name) {
     setPlayback(false);
     if (workspace !== "simulate") setWorkspace("simulate");
     else setWorkspaceMode("simulation", { silent: true });
     const cmd = (tag, value, pulse) => sendCommand(tag, value, !!pulse);
     try {
+      const plant = await resolvePlantTags();
       const before = await captureSignalSnapshot();
       if (name === "normal_start") {
-        await cmd("ESD-101.Healthy", true);
-        await cmd("LT-101.High", false);
-        await cmd("VALVE-101.OpenCommand", true);
-        await new Promise((r) => setTimeout(r, 300));
-        await cmd("System.Start", true, true);
-        logEvent("Scenario: normal startup", "ok");
+        await cmd(plant.estop, true);
+        await cmd(plant.high, false);
+        // Water transfer opens valve from System.Start; tank demo needs Open first
+        if (/VALVE-101|XV-101/i.test(plant.valveOpen) && !/XV101/i.test(plant.valveOpen)) {
+          await cmd(plant.valveOpen, true);
+          await new Promise((r) => setTimeout(r, 300));
+        }
+        await cmd(plant.start, true, true);
+        logEvent(`Scenario: normal startup (${plant.estop} / ${plant.high})`, "ok");
       } else if (name === "valve_close") {
-        await cmd("VALVE-101.OpenCommand", false);
+        await cmd(plant.valveOpen, false);
         logEvent("Scenario: valve closed", "ok");
       } else if (name === "pump_fault") {
         await api("/api/fault", {
@@ -2716,17 +3308,17 @@
         });
         logEvent("Scenario: pump fault injected (sim Q2)", "alarm");
       } else if (name === "high_level") {
-        await cmd("LT-101.High", true);
-        logEvent("Scenario: high level", "alarm");
+        await cmd(plant.high, true);
+        logEvent(`Scenario: high level (${plant.high})`, "alarm");
       } else if (name === "estop") {
-        await cmd("ESD-101.Healthy", false);
+        await cmd(plant.estop, false);
         logEvent("Scenario: E-stop activated (sim model only — not a certified physical safety function)", "alarm");
       } else if (name === "clear") {
         try { await api("/api/fault/Q2", { method: "DELETE" }); } catch (_) { /* ignore */ }
         try { await api("/api/fault/I1", { method: "DELETE" }); } catch (_) { /* ignore */ }
-        await cmd("LT-101.High", false);
-        await cmd("ESD-101.Healthy", true);
-        await cmd("System.Reset", true, true);
+        await cmd(plant.high, false);
+        await cmd(plant.estop, true);
+        await cmd(plant.reset, true, true);
         logEvent("Scenario: faults cleared / reset", "ok");
       }
       await new Promise((r) => setTimeout(r, 350));
@@ -2735,6 +3327,38 @@
       reportScenarioDiff(name, diffSignalSnapshots(before, after));
     } catch (e) {
       logEvent(`Scenario failed: ${e.message}`, "alarm");
+    }
+  }
+
+  async function runPlantOp(op) {
+    try {
+      await syncRuntime("plant op").catch(() => {});
+      const plant = await resolvePlantTags();
+      if (op === "clear_high") {
+        await sendCommand(plant.high, false);
+        logEvent(`Cleared high-level (${plant.high})`, "ok");
+      } else if (op === "clear_estop") {
+        await sendCommand(plant.estop, true);
+        await sendCommand(plant.reset, true, true);
+        logEvent(`E-stop cleared (${plant.estop}) + reset`, "ok");
+      } else if (op === "reset_trip") {
+        await sendCommand(plant.reset, true, true);
+        logEvent("Trip reset pulsed (System.Reset)", "ok");
+      } else if (op === "start_transfer") {
+        await sendCommand(plant.high, false);
+        await sendCommand(plant.estop, true);
+        if (/VALVE-101|XV-101/i.test(plant.valveOpen) && !/XV101\.OpenCommand/i.test(plant.valveOpen)) {
+          await sendCommand(plant.valveOpen, true);
+          await new Promise((r) => setTimeout(r, 350));
+        }
+        await sendCommand(plant.start, true, true);
+        logEvent("START TRANSFER pulsed — watch valve/pump on canvas", "ok");
+      } else if (op === "estop") {
+        await sendCommand(plant.estop, false);
+        logEvent("E-stop activated (sim only — not a certified physical safety function)", "alarm");
+      }
+    } catch (e) {
+      logEvent(`Plant op failed: ${e.message}`, "alarm");
     }
   }
 
@@ -2786,11 +3410,11 @@
     };
   });
 
-  document.getElementById("inspTabs").onclick = (e) => {
+  function onInspTabClick(e) {
     const b = e.target.closest("button[data-tab]");
     if (!b) return;
     inspTab = b.dataset.tab;
-    [...document.getElementById("inspTabs").querySelectorAll("button")].forEach((x) => x.classList.toggle("active", x === b));
+    syncInspTabs();
     if (inspTab === "xray" && selected) {
       xrayMode = true;
       studio.classList.add("xray-mode");
@@ -2803,18 +3427,31 @@
     } else {
       renderInspector();
     }
-  };
+  }
+  document.getElementById("inspTabs").onclick = onInspTabClick;
+  document.getElementById("advEngineering")?.addEventListener("click", onInspTabClick);
 
   document.getElementById("btnToggleSide").onclick = () => {
     studio.classList.toggle("collapsed-side");
     fitViewSoon(2);
   };
   document.getElementById("btnToggleInsp").onclick = () => {
-    studio.classList.toggle("collapsed-insp");
+    // Desktop: collapsed-insp retargets grid. Narrow (≤1100px): .show-inspector overlays.
+    const open = !studio.classList.contains("collapsed-insp");
+    if (open) {
+      studio.classList.add("collapsed-insp");
+      studio.classList.remove("show-inspector");
+    } else {
+      studio.classList.remove("collapsed-insp");
+      studio.classList.add("show-inspector");
+    }
     fitViewSoon(2);
   };
   document.getElementById("btnToggleConsole").onclick = () => {
-    document.getElementById("console").classList.toggle("collapsed");
+    const el = document.getElementById("console");
+    el?.classList.toggle("collapsed");
+    const btn = document.getElementById("btnToggleConsole");
+    if (btn) btn.textContent = el?.classList.contains("collapsed") ? "Expand" : "Collapse";
     fitViewSoon(2);
   };
   document.getElementById("btnClearLog").onclick = () => {
@@ -2879,12 +3516,59 @@
       runScenario(el.getAttribute("data-scenario"));
     });
   });
+  document.querySelectorAll("[data-plant]").forEach((el) => {
+    el.addEventListener("click", () => runPlantOp(el.getAttribute("data-plant")));
+  });
   document.getElementById("navImportPid")?.addEventListener("click", () => setWorkspace("design", { openIngest: true }));
   document.getElementById("navScratch")?.addEventListener("click", () => openWizard(1));
   document.getElementById("navOpenExisting")?.addEventListener("click", () => {
     setWorkspace("design");
     refreshProjectList().catch((e) => logEvent(e.message, "alarm"));
     document.getElementById("projectList")?.scrollIntoView({ block: "nearest" });
+  });
+  function closeProjMenu() {
+    document.getElementById("projMenu")?.removeAttribute("open");
+  }
+  document.getElementById("btnProjNew")?.addEventListener("click", () => {
+    closeProjMenu();
+    openWizard(1);
+  });
+  document.getElementById("btnProjImport")?.addEventListener("click", () => {
+    closeProjMenu();
+    setWorkspace("design", { openIngest: true });
+  });
+  document.getElementById("btnProjOpen")?.addEventListener("click", () => {
+    closeProjMenu();
+    setWorkspace("design");
+    studio.classList.remove("collapsed-side");
+    refreshProjectList().catch((e) => logEvent(e.message, "alarm"));
+    document.getElementById("projectList")?.scrollIntoView({ block: "nearest" });
+  });
+  document.getElementById("btnProjSaveAs")?.addEventListener("click", () => {
+    closeProjMenu();
+    saveProjectAs().catch((e) => logEvent(e.message, "alarm"));
+  });
+  document.getElementById("btnProjExport")?.addEventListener("click", () => {
+    closeProjMenu();
+    exportEngineeringPackage().catch((e) => logEvent(e.message, "alarm"));
+  });
+  document.getElementById("btnExportPackage")?.addEventListener("click", () => {
+    exportEngineeringPackage().catch((e) => logEvent(e.message, "alarm"));
+  });
+  document.getElementById("btnExportConnect")?.addEventListener("click", () => {
+    setWorkspace("design", { openConnect: true });
+  });
+  document.getElementById("btnAutoLayout")?.addEventListener("click", () => autoLayoutSelection());
+  document.getElementById("btnRotate")?.addEventListener("click", () => rotateSelection(90));
+  document.getElementById("btnMirror")?.addEventListener("click", () => mirrorSelection());
+  document.getElementById("chkDragLock")?.addEventListener("change", (e) => {
+    dragLock = !!e.target.checked;
+    logEvent(dragLock ? "Drag lock on — equipment won't move until unlocked" : "Drag lock off", "ok");
+  });
+  // Ensure Project menu Save still wired (same id as before)
+  document.getElementById("btnSaveLayout")?.addEventListener("click", () => {
+    closeProjMenu();
+    saveLayout().catch((e) => logEvent(e.message, "alarm"));
   });
   document.getElementById("btnSettings")?.addEventListener("click", () => {
     const ov = document.getElementById("settingsOverlay");
@@ -2897,10 +3581,10 @@
   });
   document.getElementById("btnIoRefresh")?.addEventListener("click", () => refreshIoPanel().catch((e) => logEvent(e.message, "alarm")));
   document.getElementById("ioSearch")?.addEventListener("input", () => {
-    if (workspace === "io") refreshIoPanel().catch(() => {});
+    if (workspace === "engineer" && view === "io") refreshIoPanel().catch(() => {});
   });
   document.getElementById("ioSelectedOnly")?.addEventListener("change", () => {
-    if (workspace === "io") refreshIoPanel().catch(() => {});
+    if (workspace === "engineer" && view === "io") refreshIoPanel().catch(() => {});
   });
   document.getElementById("selSimSpeed")?.addEventListener("change", async (e) => {
     const scanMs = Number(e.target.value);
@@ -2935,7 +3619,6 @@
       logEvent(`Snapshot failed: ${err.message}`, "alarm");
     }
   });
-  document.getElementById("btnSaveLayout").onclick = () => saveLayout().catch((e) => logEvent(e.message, "alarm"));
   document.getElementById("btnFit").onclick = fitView;
   document.getElementById("btnZoomSel").onclick = zoomToSelection;
   document.getElementById("btnUndo").onclick = undoLayout;
@@ -3011,6 +3694,30 @@
     if (mod && ev.key.toLowerCase() === "d" && selected) {
       ev.preventDefault();
       duplicateEquipment(selected).catch((e) => logEvent(e.message, "alarm"));
+      return;
+    }
+    if (mod && ev.key.toLowerCase() === "c" && selectedIds.size) {
+      ev.preventDefault();
+      clipboardNodes = [...selectedIds].map((id) => {
+        const n = lastCanvas?.nodes?.find((x) => x.id === id);
+        return n ? { id: n.id, tag: n.tag, type: n.type, x: n.x, y: n.y, w: n.w, h: n.h, r: n.r, properties: n.properties } : null;
+      }).filter(Boolean);
+      logEvent(`Copied ${clipboardNodes.length} equipment`, "ok");
+      return;
+    }
+    if (mod && ev.key.toLowerCase() === "v" && clipboardNodes?.length) {
+      ev.preventDefault();
+      (async () => {
+        for (const c of clipboardNodes) {
+          const node = lastCanvas?.nodes?.find((n) => n.id === c.id) || c;
+          await duplicateEquipment({ ...node, x: (c.x || 0), y: (c.y || 0), tag: c.tag, type: c.type, properties: c.properties });
+        }
+      })().catch((e) => logEvent(e.message, "alarm"));
+      return;
+    }
+    if ((ev.key === "m" || ev.key === "M") && selectedIds.size) {
+      ev.preventDefault();
+      mirrorSelection();
       return;
     }
     if (ev.key === "f" || ev.key === "F") {
@@ -3194,10 +3901,11 @@
     });
     document.getElementById("btnIlkTestEstope")?.addEventListener("click", async () => {
       try {
-        await sendCommand("ESD-101.Healthy", false);
+        const plant = await resolvePlantTags();
+        await sendCommand(plant.estop, false);
         await loadInterlocks();
         selectInterlock(ilk.id);
-        logEvent("E-stop trip forced (sim) — refresh Interlocks to see ACTIVE chain", "alarm");
+        logEvent(`E-stop trip forced (sim ${plant.estop}) — refresh Interlocks to see ACTIVE chain`, "alarm");
       } catch (e) {
         logEvent(e.message, "alarm");
       }
@@ -3236,16 +3944,23 @@
   }
 
   async function openInterlocksPanel(opts = {}) {
-    if (!opts.stayInWorkspace && workspace !== "logic") {
-      setWorkspace("logic", { equipmentId: opts.equipmentId, selectId: opts.selectId });
+    if (!opts.stayInWorkspace && workspace !== "engineer") {
+      setWorkspace("engineer", {
+        openInterlocks: true,
+        equipmentId: opts.equipmentId,
+        selectId: opts.selectId
+      });
       return;
     }
     closeEmbed();
     document.getElementById("ingestPanel")?.classList.add("hidden");
+    document.getElementById("engineerPanel")?.classList.add("hidden");
+    ioPanelPanel?.classList.add("hidden");
     interlocksPanel?.classList.remove("hidden");
     view = "interlocks";
-    document.getElementById("viewTitle").textContent = "Logic";
+    document.getElementById("viewTitle").textContent = "Engineer · Interlocks";
     document.getElementById("navInterlocks")?.classList.add("active");
+    document.getElementById("navEngineerGen")?.classList.remove("active");
     try {
       await loadInterlocks(opts.equipmentId ? { equipmentId: opts.equipmentId } : {});
       if (opts.equipmentId && !(interlocksData?.interlocks || []).length) {
@@ -3279,8 +3994,11 @@
       selectedInterlockId = null;
       clearInterlockHighlight();
     }
-    if (view === "interlocks" && workspace === "logic") {
-      /* stay on logic workspace — panel closed only when switching away via setWorkspace */
+    if (view === "interlocks" && workspace === "engineer") {
+      view = "map";
+      viewport.classList.remove("hidden");
+      viewport.style.display = "";
+      document.getElementById("viewTitle").textContent = "Engineer";
     } else if (view === "interlocks") {
       view = "map";
       viewport.classList.remove("hidden");
@@ -3288,7 +4006,165 @@
     }
   }
 
-  document.getElementById("navInterlocks")?.addEventListener("click", () => setWorkspace("logic"));
+  document.getElementById("navInterlocks")?.addEventListener("click", () =>
+    setWorkspace("engineer", { openInterlocks: true })
+  );
+  document.getElementById("navIoMap")?.addEventListener("click", () =>
+    setWorkspace("engineer", { openIo: true })
+  );
+  document.getElementById("navLogicObs")?.addEventListener("click", () => {
+    setWorkspace("engineer", { panel: "logic" });
+    document.getElementById("advEngineering")?.setAttribute("open", "");
+  });
+  document.getElementById("navEngineerGen")?.addEventListener("click", () =>
+    setWorkspace("engineer", { openEngineer: true })
+  );
+
+  function engProjectId() {
+    return projectId || "active";
+  }
+
+  function renderEngJson(title, data) {
+    const body = document.getElementById("engBody");
+    if (!body) return;
+    body.innerHTML = `<h4>${esc(title)}</h4><pre class="mono engOut">${esc(JSON.stringify(data, null, 2))}</pre>`;
+  }
+
+  async function openEngineerPanel(opts = {}) {
+    if (!opts.stayInWorkspace && workspace !== "engineer") {
+      setWorkspace("engineer", { openEngineer: true });
+      return;
+    }
+    closeEmbed();
+    interlocksPanel?.classList.add("hidden");
+    ioPanelPanel?.classList.add("hidden");
+    document.getElementById("ingestPanel")?.classList.add("hidden");
+    const panel = document.getElementById("engineerPanel");
+    panel?.classList.remove("hidden");
+    view = "engineer_gen";
+    viewport.classList.add("hidden");
+    document.getElementById("viewTitle").textContent = "Engineer · Controls codegen";
+    document.getElementById("navEngineerGen")?.classList.add("active");
+    document.getElementById("navInterlocks")?.classList.remove("active");
+    logEvent("P6 Engineer panel — preliminary deliverables; approval required", "ok");
+  }
+
+  document.getElementById("btnOpenEngineer")?.addEventListener("click", () => openEngineerPanel());
+  document.getElementById("btnEngBackIlk")?.addEventListener("click", () =>
+    openInterlocksPanel({ stayInWorkspace: true, equipmentId: selected?.id })
+  );
+  document.getElementById("btnEngTemplates")?.addEventListener("click", async () => {
+    try {
+      const r = await api(`/api/engineer/projects/${engProjectId()}/templates/apply-defaults`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apply: true })
+      });
+      renderEngJson("Template apply-defaults", r);
+      logEvent(`Templates applied (suggestions=${(r.suggestions || []).length})`, "ok");
+      await syncRuntime("engineer.templates");
+    } catch (e) {
+      logEvent("Template apply failed: " + e.message, "alarm");
+    }
+  });
+  document.getElementById("btnEngIo")?.addEventListener("click", async () => {
+    try {
+      const r = await api(`/api/engineer/projects/${engProjectId()}/io/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      const p = r.proposal || {};
+      renderEngJson("I/O proposal (no invented addresses)", {
+        counts: p.counts,
+        honesty: p.honesty,
+        missingRequired: p.missingRequired,
+        sampleRows: (p.rows || []).slice(0, 24)
+      });
+      logEvent(`I/O list: DI=${p.counts?.DI} DO=${p.counts?.DO} unassigned=${p.counts?.unassignedHardware}`, "ok");
+    } catch (e) {
+      logEvent("I/O generate failed: " + e.message, "alarm");
+    }
+  });
+  document.getElementById("btnEngStrategies")?.addEventListener("click", async () => {
+    try {
+      const r = await api(`/api/engineer/projects/${engProjectId()}/strategies`);
+      renderEngJson("Control strategy suggestions", {
+        suggestions: r.suggestions,
+        missingRequirements: r.missingRequirements,
+        topology: r.topology
+      });
+      logEvent(`Strategies: ${(r.suggestions || []).length} · gaps=${(r.missingRequirements || []).length}`, "ok");
+    } catch (e) {
+      logEvent("Strategies failed: " + e.message, "alarm");
+    }
+  });
+  document.getElementById("btnEngSt")?.addEventListener("click", async () => {
+    try {
+      const r = await api(`/api/engineer/projects/${engProjectId()}/st/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendor: "iec61131_st" })
+      });
+      const st = r.artifact?.st || "";
+      const body = document.getElementById("engBody");
+      if (body) {
+        body.innerHTML = `<h4>Preliminary ST ${esc(r.artifact?.id || "")}</h4>
+          <p class="warn">${esc((r.artifact?.limitations || []).join(" · "))}</p>
+          <p class="muted">sample: ${esc(r.samplePath || "n/a")} · deployable=${esc(String(r.deployable))}</p>
+          <div class="cmdRow">
+            <button type="button" id="btnEngApproveSt">Approve</button>
+            <button type="button" id="btnEngRejectSt">Reject</button>
+          </div>
+          <pre class="mono engOut">${esc(st.slice(0, 12000))}</pre>`;
+        document.getElementById("btnEngApproveSt")?.addEventListener("click", async () => {
+          try {
+            await api(`/api/engineer/projects/${engProjectId()}/logic/review`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ artifactId: r.artifact.id, decision: "approve", reviewer: "studio" })
+            });
+            logEvent("ST artifact approved (engineer gate)", "ok");
+          } catch (e) {
+            logEvent(e.message, "alarm");
+          }
+        });
+        document.getElementById("btnEngRejectSt")?.addEventListener("click", async () => {
+          try {
+            await api(`/api/engineer/projects/${engProjectId()}/logic/review`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ artifactId: r.artifact.id, decision: "reject", comment: "Rejected from Studio", reviewer: "studio" })
+            });
+            logEvent("ST artifact rejected", "alarm");
+          } catch (e) {
+            logEvent(e.message, "alarm");
+          }
+        });
+      }
+      logEvent(`ST generated · ${r.artifact?.id}`, "ok");
+    } catch (e) {
+      logEvent("ST generate failed: " + e.message, "alarm");
+      if (e.data) renderEngJson("ST generate blocked", e.data);
+    }
+  });
+  document.getElementById("btnEngAcceptWt")?.addEventListener("click", async () => {
+    try {
+      const r = await api(`/api/engineer/projects/${engProjectId()}/acceptance/water-transfer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: false })
+      });
+      renderEngJson("Water-transfer acceptance path", r);
+      logEvent(
+        r.ok ? `Acceptance path OK · sample=${r.samplePath || "?"}` : `Acceptance gaps: ${(r.gaps || []).join("; ")}`,
+        r.ok ? "ok" : "alarm"
+      );
+    } catch (e) {
+      logEvent("Acceptance path failed: " + e.message, "alarm");
+      if (e.data) renderEngJson("Acceptance blocked", e.data);
+    }
+  });
   document.getElementById("btnIlkRefresh")?.addEventListener("click", async () => {
     await loadInterlocks();
     renderIlkList();
@@ -3302,12 +4178,24 @@
     fitViewSoon(2);
   });
 
-  // —— In-Studio ingest (P&ID / docs) ——
+  // —— In-Studio ingest (P6 Vision / P&ID import wizard) ——
   let ingestCandidates = [];
+  let ingestConnections = [];
+  let ingestGaps = [];
   let ingestLast = null;
   let ingestObjectUrl = null;
   let ingestSelected = -1;
+  let ingestWizardStep = 1;
   const ingestPanel = document.getElementById("ingestPanel");
+
+  function setIngestStep(step) {
+    ingestWizardStep = step;
+    document.querySelectorAll("#ingestSteps li").forEach((li) => {
+      const n = Number(li.dataset.step);
+      li.classList.toggle("active", n === step);
+      li.classList.toggle("done", n < step);
+    });
+  }
 
   function openIngestPanel(opts = {}) {
     if (!opts.stayInWorkspace && workspace !== "design") {
@@ -3324,6 +4212,7 @@
     document.getElementById("viewTitle").textContent = "Import P&ID";
     setWorkspaceMode("engineering", { silent: true });
     activeWorkflow = "upload";
+    setIngestStep(ingestCandidates.length ? 3 : 1);
   }
 
   function closeIngestPanel() {
@@ -3336,23 +4225,89 @@
     }
   }
 
+  function highlightIngestSource(tag) {
+    const src = document.getElementById("ingestSource");
+    const text = ingestLast?.extracted?.text || "";
+    if (!src || !text) return;
+    if (!tag) {
+      src.textContent = text;
+      return;
+    }
+    const re = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    src.innerHTML = esc(text).replace(re, (m) => `<mark>${m}</mark>`);
+  }
+
+  function renderIngestConnections() {
+    const host = document.getElementById("ingestConnList");
+    if (!host) return;
+    if (!ingestConnections.length) {
+      host.innerHTML = `<p class="muted">No proposed connections — accept tags first, or draw links manually on the canvas after promote.</p>`;
+      return;
+    }
+    host.innerHTML = ingestConnections
+      .map(
+        (c, i) => `
+      <div class="ingestConnRow ${c.ambiguous ? "ambiguous" : ""}">
+        <input type="checkbox" data-conn="${i}" ${c.include ? "checked" : ""} title="${c.ambiguous ? "Ambiguous — only include after drawing check" : "Include connection"}" />
+        <span>${esc(c.fromTag)} → ${esc(c.toTag)} <span class="muted">(${esc(c.connectionType || "process")})</span>
+          ${c.ambiguous ? `<span class="ingestAmbBadge">ambiguous</span>` : ""}
+          <div class="muted">${esc(c.reason || "")}</div>
+        </span>
+        <span class="muted">${esc(String(Math.round((c.confidence || 0) * 100)))}%</span>
+      </div>`
+      )
+      .join("");
+    host.querySelectorAll("[data-conn]").forEach((el) => {
+      el.onchange = () => {
+        const i = Number(el.dataset.conn);
+        ingestConnections[i].include = el.checked;
+        if (el.checked) setIngestStep(Math.max(ingestWizardStep, 4));
+      };
+    });
+  }
+
+  function renderIngestGaps() {
+    const host = document.getElementById("ingestGapList");
+    if (!host) return;
+    if (!ingestGaps.length) {
+      host.innerHTML = `<p class="muted">No open engineering gaps from this extract.</p>`;
+      return;
+    }
+    host.innerHTML =
+      `<h4 style="margin:0 0 0.35rem;font-size:0.75rem">Engineering decisions</h4>` +
+      ingestGaps
+        .map(
+          (g) => `
+      <div class="ingestGap ${g.severity === "blocker" ? "blocker" : ""}">
+        <strong>${esc(g.topic || "Decision")}</strong>
+        <div>${esc(g.message || "")}</div>
+        ${g.relatedTags?.length ? `<div class="muted">${esc(g.relatedTags.join(", "))}</div>` : ""}
+      </div>`
+        )
+        .join("");
+  }
+
   function renderIngestList() {
     const host = document.getElementById("ingestList");
     if (!host) return;
     if (!ingestCandidates.length) {
-      host.innerHTML = `<p class="muted">No equipment rows yet — complete STEP 1 (extract document).</p>`;
+      host.innerHTML = `<p class="muted">No equipment rows yet — upload documents and Extract. On failure, use Manual reconstruct.</p>`;
+      renderIngestConnections();
+      renderIngestGaps();
       return;
     }
     const hideDemo = !!document.getElementById("ingestHideDemo")?.checked;
     const visible = ingestCandidates
       .map((c, i) => ({ c, i }))
       .filter(({ c }) => c.status !== "deleted" && (!hideDemo || c.tagOrigin !== "demo_reference"));
-    const head = `<div class="ingestRow ingestHead"><span>Include</span><span>Tag</span><span>Type</span><span>Origin</span><span>Conf</span></div>`;
+    const head = `<div class="ingestRow ingestHead"><span>Inc</span><span>Tag</span><span>Type</span><span>Origin</span><span>Conf</span><span>Src</span></div>`;
     host.innerHTML =
       head +
       visible
-        .map(
-          ({ c, i }) => `
+        .map(({ c, i }) => {
+          const ref = c.sourceRef || (c.sourceRefs && c.sourceRefs[0]) || {};
+          const srcLabel = ref.page != null ? `p${ref.page}` : "—";
+          return `
       <div class="ingestCand ingestRow ${c.status || ""} ${i === ingestSelected ? "active" : ""}" data-i="${i}">
         <input type="checkbox" data-inc="${i}" ${c.include || c.status === "confirmed" ? "checked" : ""} ${c.status === "deleted" ? "disabled" : ""} />
         <input type="text" data-tag="${i}" value="${esc(c.tag)}" ${c.status === "deleted" ? "disabled" : ""} />
@@ -3362,8 +4317,9 @@
         </select>
         <span class="${c.tagOrigin === "demo_reference" ? "ingestOriginDemo" : "muted"}">${esc(c.tagOrigin === "demo_reference" ? "demo ref" : "extracted")}</span>
         <span class="muted">${esc(String(Math.round((c.confidence || 0) * 100)))}%</span>
-      </div>`
-        )
+        <span class="muted" title="${esc(ref.excerpt || ref.documentName || "")}">${esc(srcLabel)}</span>
+      </div>`;
+        })
         .join("") +
       (hideDemo && ingestCandidates.some((c) => c.tagOrigin === "demo_reference")
         ? `<p class="muted">Demo/reference tags hidden — uncheck “Hide demo/reference tags” to review training P&amp;ID fixtures.</p>`
@@ -3373,13 +4329,7 @@
         if (ev.target.closest("input,select")) return;
         ingestSelected = Number(row.dataset.i);
         renderIngestList();
-        const tag = ingestCandidates[ingestSelected]?.tag;
-        const src = document.getElementById("ingestSource");
-        const text = ingestLast?.extracted?.text || "";
-        if (src && tag && text) {
-          const re = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-          src.innerHTML = esc(text).replace(re, (m) => `<mark>${m}</mark>`);
-        }
+        highlightIngestSource(ingestCandidates[ingestSelected]?.tag);
       };
     });
     host.querySelectorAll("[data-inc]").forEach((el) => {
@@ -3387,14 +4337,28 @@
         const i = Number(el.dataset.inc);
         ingestCandidates[i].include = el.checked;
         if (el.checked) ingestCandidates[i].status = "confirmed";
+        else if (ingestCandidates[i].status === "confirmed") ingestCandidates[i].status = "proposed";
+        setIngestStep(Math.max(ingestWizardStep, 3));
+        updateIngestPromoteEnabled();
       };
     });
     host.querySelectorAll("[data-tag]").forEach((el) => {
-      el.onchange = () => { ingestCandidates[Number(el.dataset.tag)].tag = el.value.trim().toUpperCase(); };
+      el.onchange = () => {
+        ingestCandidates[Number(el.dataset.tag)].tag = el.value.trim().toUpperCase();
+      };
     });
     host.querySelectorAll("[data-type]").forEach((el) => {
-      el.onchange = () => { ingestCandidates[Number(el.dataset.type)].type = el.value; };
+      el.onchange = () => {
+        ingestCandidates[Number(el.dataset.type)].type = el.value;
+        ingestCandidates[Number(el.dataset.type)].classification = el.value;
+      };
     });
+    renderIngestConnections();
+    renderIngestGaps();
+    updateIngestPromoteEnabled();
+  }
+
+  function updateIngestPromoteEnabled() {
     const btn = document.getElementById("btnIngestPromote");
     if (btn) {
       btn.disabled = !ingestCandidates.some((c) => c.status !== "deleted" && (c.include || c.status === "confirmed"));
@@ -3406,15 +4370,33 @@
     setWorkspace("design");
   });
 
+  document.getElementById("btnIngestManual")?.addEventListener("click", () => {
+    logEvent(
+      "Manual reconstruction: place equipment from the library, draw connections, keep source docs as references. No fabricated confidence.",
+      "ok"
+    );
+    closeIngestPanel();
+    setWorkspace("design");
+    setIngestStep(1);
+  });
+
   document.getElementById("btnIngestExtract")?.addEventListener("click", async () => {
-    const f = document.getElementById("ingestFile")?.files?.[0];
-    if (!f) return logEvent("Choose a P&ID or document file first", "alarm");
-    document.getElementById("ingestMeta").textContent = "Extracting…";
+    const input = document.getElementById("ingestFile");
+    const fileList = input?.files ? [...input.files] : [];
+    if (!fileList.length) return logEvent("Choose one or more P&ID / document files first", "alarm");
+    setIngestStep(2);
+    document.getElementById("ingestMeta").textContent = `Extracting ${fileList.length} file(s)…`;
     document.getElementById("ingestWarn").textContent = "";
+    const prog = document.getElementById("ingestProgress");
+    if (prog) {
+      prog.hidden = false;
+      prog.textContent = "Pipeline: receive → extract → mine → connections → gaps…";
+    }
     if (ingestObjectUrl) URL.revokeObjectURL(ingestObjectUrl);
     const prev = document.getElementById("ingestPreview");
-    if (/^image\//.test(f.type)) {
-      ingestObjectUrl = URL.createObjectURL(f);
+    const firstImg = fileList.find((f) => /^image\//.test(f.type) && !/svg/i.test(f.type));
+    if (firstImg) {
+      ingestObjectUrl = URL.createObjectURL(firstImg);
       prev.src = ingestObjectUrl;
       prev.hidden = false;
     } else {
@@ -3422,53 +4404,70 @@
       prev.hidden = true;
     }
     const fd = new FormData();
-    fd.append("file", f);
+    fileList.forEach((f, i) => {
+      if (i === 0) fd.append("file", f);
+      fd.append("files", f);
+    });
     const r = await fetch("/api/ingest/ocr", { method: "POST", body: fd });
     ingestLast = await r.json();
     if (!ingestLast.ok && ingestLast.error) {
       document.getElementById("ingestWarn").textContent = ingestLast.error;
-      logEvent("Extract failed: " + ingestLast.error, "alarm");
+      logEvent("Extract failed: " + ingestLast.error + " — use Manual reconstruct", "alarm");
+      setIngestStep(1);
       return;
     }
+    if (prog && ingestLast.stages) {
+      prog.textContent = ingestLast.stages
+        .map((s) => `${s.id}:${s.status}${s.candidateCount != null ? `(${s.candidateCount})` : ""}`)
+        .join(" → ");
+    }
     const ex = ingestLast.extracted || {};
-    const isImage = /^image\//.test(f.type) || ex.engine === "tesseract.js" || ex.unfinished;
+    const isImage = !!ex.unfinished || ex.engine === "tesseract.js";
+    const names = (ingestLast.documents || []).map((d) => d.name).join(", ") || fileList.map((f) => f.name).join(", ");
     document.getElementById("ingestMeta").textContent =
-      `${f.name} · engine=${ex.engine || "?"} · conf=${ex.confidence != null ? Math.round(ex.confidence * 100) + "%" : "n/a"} · ${(ingestLast.candidates || []).length} tags` +
+      `${names} · engine=${ex.engine || "?"} · conf=${ex.confidence != null ? Math.round(ex.confidence * 100) + "%" : "n/a"} · ${(ingestLast.candidates || []).length} tags · ${(ingestLast.connections || []).length} conn` +
       (isImage ? " · image OCR unfinished" : "");
     const baseWarn =
       ex.warning ||
+      ingestLast.note ||
       "Candidates are UNVERIFIED until you confirm and promote. Runtime will rebind after promote.";
     document.getElementById("ingestWarn").textContent = isImage
       ? baseWarn
-      : `${baseWarn} Prefer text/PDF/CSV for reliable tag mining.`;
+      : `${baseWarn} Ambiguous connections stay unchecked until you accept them.`;
     document.getElementById("ingestSource").textContent =
       ex.text ||
       (isImage
-        ? "(LIMIT: No usable text from scanned image OCR — try a text export, searchable PDF, or equipment CSV.)"
+        ? "(LIMIT: No usable text from scanned image OCR — try a text export, searchable PDF, SVG, or equipment CSV.)"
         : "(No text extracted.)");
     ingestCandidates = (ingestLast.candidates || []).map((c) => ({
       ...c,
       status: "proposed",
       include: !isImage && c.tagOrigin !== "demo_reference" && (c.confidence || 0) >= 0.5
     }));
+    ingestConnections = (ingestLast.connections || []).map((c) => ({
+      ...c,
+      include: !!c.include && !c.ambiguous
+    }));
+    ingestGaps = ingestLast.gaps || [];
     ingestSelected = -1;
     renderIngestList();
+    setIngestStep(ingestCandidates.length ? 3 : 1);
+    if (ingestGaps.length) setIngestStep(Math.max(ingestWizardStep, 5));
     const n = ingestCandidates.length;
     if (isImage) {
       pushAlarm(
         n
-          ? `Image OCR unfinished — ${n} candidate(s) are UNVERIFIED (prefer text/PDF/CSV)`
-          : "Image OCR unfinished — no usable tags; use text/PDF/CSV or typed equipment list",
+          ? `Image OCR unfinished — ${n} candidate(s) are UNVERIFIED (prefer text/PDF/SVG/CSV)`
+          : "Image OCR unfinished — no usable tags; use text/PDF/SVG/CSV or Manual reconstruct",
         { limit: true }
       );
     }
     const extractMsg = n
-      ? `Extracted ${n} candidate tag(s)${isImage ? " (image OCR unfinished — review carefully)" : ""}`
+      ? `Extracted ${n} candidate tag(s), ${(ingestConnections || []).length} connection proposal(s)${isImage ? " (image OCR unfinished)" : ""}`
       : isImage
-        ? "Image OCR returned no tags (unfinished path) — use text/PDF/CSV"
-        : "No candidate tags found";
-    // Image LIMIT already posted to Alarms; avoid duplicate mirror via logEvent("alarm")
-    logEvent(extractMsg, isImage ? "" : (n ? "ok" : "alarm"));
+        ? "Image OCR returned no tags (unfinished path) — use Manual reconstruct"
+        : "No candidate tags found — use Manual reconstruct";
+    logEvent(extractMsg, isImage ? "" : n ? "ok" : "alarm");
     activeWorkflow = "review";
   });
 
@@ -3478,17 +4477,45 @@
       c.include = true;
       c.status = "confirmed";
     });
+    setIngestStep(3);
     renderIngestList();
   });
+
+  document.getElementById("btnIngestReject")?.addEventListener("click", () => {
+    if (ingestSelected < 0) return logEvent("Select a candidate row to reject", "alarm");
+    ingestCandidates[ingestSelected].status = "deleted";
+    ingestCandidates[ingestSelected].include = false;
+    ingestSelected = -1;
+    renderIngestList();
+  });
+
+  document.getElementById("btnIngestMerge")?.addEventListener("click", () => {
+    const selected = ingestCandidates
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.status !== "deleted" && (c.include || c.status === "confirmed"));
+    if (selected.length < 2) return logEvent("Confirm at least two tags to merge into the first", "alarm");
+    const [keep, ...rest] = selected;
+    rest.forEach(({ c }) => {
+      c.status = "deleted";
+      c.include = false;
+      keep.c.sourceRefs = [...(keep.c.sourceRefs || [keep.c.sourceRef].filter(Boolean)), c.sourceRef].filter(Boolean);
+    });
+    logEvent(`Merged ${rest.length} tag(s) into ${keep.c.tag}`, "ok");
+    renderIngestList();
+  });
+
   document.getElementById("ingestHideDemo")?.addEventListener("change", () => renderIngestList());
 
   document.getElementById("btnIngestPromote")?.addEventListener("click", async () => {
     const selected = ingestCandidates.filter((c) => c.status !== "deleted" && (c.include || c.status === "confirmed"));
     if (!selected.length) return logEvent("Confirm at least one equipment row before promote", "alarm");
+    const connSelected = ingestConnections.filter((c) => c.include);
+    const amb = connSelected.filter((c) => c.ambiguous);
     const approve = !!document.getElementById("ingestApprove")?.checked;
     const tags = selected.map((c) => c.tag).join(", ");
     const ok = window.confirm(
-      `Add ${selected.length} equipment tag(s) to the engineering diagram?\n\n${tags}\n\n` +
+      `Promote ${selected.length} equipment tag(s) and ${connSelected.length} connection(s)?\n\n${tags}\n\n` +
+        (amb.length ? `Includes ${amb.length} AMBIGUOUS connection(s) you explicitly checked.\n\n` : "") +
         (approve
           ? "Marked approved: equipment will be ENGINEER_APPROVED."
           : "Not marked approved: equipment stays UNVERIFIED (inference) until you approve in the inspector.")
@@ -3497,23 +4524,51 @@
       logEvent("Promote cancelled — no silent approve", "ok");
       return;
     }
-    const f = document.getElementById("ingestFile")?.files?.[0];
+    setIngestStep(6);
+    const fileInput = document.getElementById("ingestFile");
+    const fileList = fileInput?.files ? [...fileInput.files] : [];
+    const retain = !!document.getElementById("ingestRetain")?.checked;
     try {
-      const data = await api("/api/ingest/ocr/promote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-P6-Role": "engineer" },
-        body: JSON.stringify({
-          projectId,
-          documentName: f?.name || "Studio ingest",
-          format: f?.type || "unknown",
-          placeOnCanvas: true,
-          approveAll: !!document.getElementById("ingestApprove")?.checked,
-          equipment: selected.map(({ tag, type }) => ({ tag, type }))
-        })
-      });
+      let data;
+      if (retain && fileList.length) {
+        const fd = new FormData();
+        fd.append("projectId", projectId || "");
+        fd.append("placeOnCanvas", "true");
+        fd.append("approveAll", approve ? "true" : "false");
+        fd.append("documentName", fileList[0]?.name || "Studio ingest");
+        fd.append("equipment", JSON.stringify(selected.map(({ tag, type, sourceRef, sourceRefs }) => ({ tag, type, sourceRef, sourceRefs }))));
+        fd.append("connections", JSON.stringify(connSelected));
+        fd.append("gaps", JSON.stringify(ingestGaps));
+        fileList.forEach((f, i) => {
+          if (i === 0) fd.append("file", f);
+          fd.append("files", f);
+        });
+        const r = await fetch("/api/ingest/ocr/promote", {
+          method: "POST",
+          headers: { "X-P6-Role": "engineer" },
+          body: fd
+        });
+        data = await r.json();
+        if (!r.ok) throw new Error(data.error || r.statusText);
+      } else {
+        data = await api("/api/ingest/ocr/promote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-P6-Role": "engineer" },
+          body: JSON.stringify({
+            projectId,
+            documentName: fileList[0]?.name || "Studio ingest",
+            format: fileList[0]?.type || "unknown",
+            placeOnCanvas: true,
+            approveAll: approve,
+            equipment: selected.map(({ tag, type, sourceRef, sourceRefs }) => ({ tag, type, sourceRef, sourceRefs })),
+            connections: connSelected,
+            gaps: ingestGaps
+          })
+        });
+      }
       projectId = data.project?.id || projectId;
       logEvent(
-        `Promoted ${data.created?.equipment?.length || 0} equipment · Runtime rebound (${data.runtimeBound?.signalCount ?? "?"} signals)`,
+        `Promoted ${data.created?.equipment?.length || 0} equipment · ${data.created?.connections?.length || 0} connections · ${data.created?.documents?.length || 0} doc ref(s) · Runtime rebound (${data.runtimeBound?.signalCount ?? "?"} signals)`,
         "ok"
       );
       closeIngestPanel();
@@ -3530,13 +4585,38 @@
     const host = document.getElementById("libList");
     if (!host) return;
     const q = String(filter || "").toLowerCase();
-    host.innerHTML = LIB_TYPES.filter((t) => !q || t.type.includes(q) || t.label.toLowerCase().includes(q))
-      .map((t) => `<button type="button" class="libItem" draggable="true" data-type="${esc(t.type)}">${esc(t.label)}</button>`)
-      .join("");
+    const cats = LIB_CATEGORIES.map((cat) => {
+      const items = cat.items.filter(
+        (t) =>
+          !q ||
+          t.type.includes(q) ||
+          t.label.toLowerCase().includes(q) ||
+          cat.label.toLowerCase().includes(q)
+      );
+      if (!items.length) return "";
+      return `<details class="libCat" ${q || cat.id === "pumps" || cat.id === "tanks" ? "open" : ""}>
+        <summary>${esc(cat.label)}</summary>
+        <div class="libCatItems">${items
+          .map(
+            (t) => `<button type="button" class="libItem" draggable="true" data-type="${esc(t.type)}" title="Drag onto canvas">
+              <span class="libSym" aria-hidden="true">${symbolSvg(t.type, false, "closed")}</span>
+              <span class="libLabel">${esc(t.label)}</span>
+            </button>`
+          )
+          .join("")}</div>
+      </details>`;
+    }).filter(Boolean);
+    host.innerHTML = cats.join("") || `<p class="muted">No library matches.</p>`;
     host.querySelectorAll(".libItem").forEach((btn) => {
       btn.addEventListener("dragstart", (ev) => {
         ev.dataTransfer.setData("application/p6-equipment-type", btn.dataset.type);
         ev.dataTransfer.effectAllowed = "copy";
+      });
+      btn.addEventListener("dblclick", () => {
+        const rect = viewport.getBoundingClientRect();
+        dropEquipment(btn.dataset.type, rect.left + rect.width / 2, rect.top + rect.height / 2).catch((e) =>
+          logEvent(e.message, "alarm")
+        );
       });
     });
   }
@@ -3647,6 +4727,13 @@
     setWorkspace("design");
     setConnectMode(!connectMode);
   });
+  document.getElementById("btnSymPid")?.addEventListener("click", () => setSymbolMode("pid", { user: true }));
+  document.getElementById("btnSymScada")?.addEventListener("click", () => setSymbolMode("scada", { user: true }));
+  document.getElementById("chkShowPorts")?.addEventListener("change", (e) => {
+    showPorts = !!e.target.checked;
+    if (lastCanvas) patchSelectionStyles();
+  });
+  setSymbolMode(symbolMode, { silent: true });
   document.getElementById("btnXray")?.addEventListener("click", () => {
     if (workspace !== "simulate") setWorkspace("simulate");
     setXrayMode(!xrayMode);
@@ -3970,9 +5057,11 @@
     }
   }
 
-  // Autosave layout after idle
+  // Autosave layout after idle (+ local recovery draft)
   const autosaveTimer = setInterval(() => {
-    if (layoutDirty) saveLayout().catch(() => {});
+    if (!layoutDirty) return;
+    persistAutosaveDraft();
+    saveLayout().catch(() => {});
   }, 15000);
 
   const params = new URLSearchParams(location.search);
@@ -3981,19 +5070,23 @@
     const wsParam = params.get("ws") || params.get("workspace");
     const modeParam = params.get("mode");
     let initialWs = "design";
-    if (wsParam && ["design", "logic", "io", "simulate", "verify"].includes(wsParam)) initialWs = wsParam;
-    else if (modeParam === "simulation" || params.get("demo") === "1") initialWs = "simulate";
+    if (wsParam) initialWs = normalizeWorkspace(wsParam);
+    else if (modeParam === "simulation") initialWs = "simulate";
     else if (modeParam === "diagnostic") initialWs = "simulate";
-    else if (modeParam === "engineering") initialWs = "design";
+    else if (modeParam === "engineering" || params.get("demo") === "1") initialWs = "design";
     setWorkspace(initialWs);
     await refreshProject();
     await refreshProjectList();
+    // Always bind Runtime to the active Studio project (fixes Water Transfer canvas vs Tank Transfer PLC mismatch)
+    await syncRuntime("boot").catch((e) => logEvent(`Boot bind: ${e.message}`, "alarm"));
     await refreshStatus();
     await refreshCanvas();
+    tryRestoreAutosave();
     await loadPlatformLimits();
     await refreshIlkCorners();
+    updateStatusChips();
     fitViewSoon(4, { force: true });
-    logEvent("P6 Studio ready — Design · Logic · I/O · Simulate · Verify · same model across views", "ok");
+    logEvent("P6 Studio ready — Design · Engineer · Simulate · Verify & Export · same model across views", "ok");
     if (params.get("demo") === "1") {
       await api("/api/runtime/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       logEvent("Sample plant: runtime started", "ok");
@@ -4027,11 +5120,16 @@
     if (ilkPollTick % 5 === 0) refreshIlkCorners();
   }, 400);
 
-  window.addEventListener("beforeunload", () => {
+  window.addEventListener("beforeunload", (ev) => {
+    if (layoutDirty) persistAutosaveDraft();
     destroyed = true;
     clearInterval(pollTimer);
     clearInterval(autosaveTimer);
     if (rafId) cancelAnimationFrame(rafId);
+    if (layoutDirty) {
+      ev.preventDefault();
+      ev.returnValue = "";
+    }
   });
 
   document.addEventListener("visibilitychange", () => {

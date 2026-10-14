@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="studio.css" />
+  <link rel="stylesheet" href="studio.css?v=20261014a" />
 </head>
 <body>
   <div class="studio" id="studio" data-workspace="design">
@@ -50,11 +50,21 @@
         <span class="pill" id="pillSave">SAVE</span>
       </div>
       <div class="studioActions topActions">
+        <details class="projMenu" id="projMenu">
+          <summary>Project</summary>
+          <div class="projMenuPanel" role="menu">
+            <button type="button" id="btnProjNew" role="menuitem">New…</button>
+            <button type="button" id="btnProjImport" role="menuitem">Import Drawing…</button>
+            <button type="button" id="btnProjOpen" role="menuitem">Open…</button>
+            <button type="button" id="btnSaveLayout" role="menuitem" title="Save layout (Ctrl+S)">Save</button>
+            <button type="button" id="btnProjSaveAs" role="menuitem">Save As…</button>
+            <button type="button" id="btnProjExport" role="menuitem">Export package…</button>
+          </div>
+        </details>
         <button type="button" id="btnUndo" title="Undo layout (Ctrl+Z)">Undo</button>
         <button type="button" id="btnRedo" title="Redo layout (Ctrl+Y)">Redo</button>
-        <button type="button" id="btnSaveLayout" title="Save layout (Ctrl+S)">Save</button>
-        <button type="button" id="btnToggleSide" title="Toggle tools">Tools</button>
-        <button type="button" id="btnToggleInsp" title="Toggle properties">Props</button>
+        <button type="button" id="btnToggleSide" title="Toggle library">Library</button>
+        <button type="button" id="btnToggleInsp" title="Toggle inspector">Inspector</button>
         <button type="button" id="btnSettings" title="Settings / limits">Settings</button>
         <a class="linkish" href="/landing.html">Exit</a>
       </div>
@@ -62,10 +72,9 @@
 
     <nav class="workspaceNav" id="workspaceNav" role="tablist" aria-label="Engineering workspace">
       <button type="button" class="wsTab active" data-ws="design" role="tab" aria-selected="true">Design</button>
-      <button type="button" class="wsTab" data-ws="logic" role="tab" aria-selected="false">Logic</button>
-      <button type="button" class="wsTab" data-ws="io" role="tab" aria-selected="false">I/O</button>
+      <button type="button" class="wsTab" data-ws="engineer" role="tab" aria-selected="false">Engineer</button>
       <button type="button" class="wsTab" data-ws="simulate" role="tab" aria-selected="false">Simulate</button>
-      <button type="button" class="wsTab" data-ws="verify" role="tab" aria-selected="false">Verify</button>
+      <button type="button" class="wsTab" data-ws="verify" role="tab" aria-selected="false">Verify &amp; Export</button>
     </nav>
 
     <div class="studioBody">
@@ -73,41 +82,53 @@
         <div class="sideCtx" data-ws-side="design">
           <details class="navSection" open>
             <summary>Project</summary>
-            <button type="button" class="navItem" id="navImportPid">Import P&amp;ID / docs</button>
+            <button type="button" class="navItem" id="navImportPid">Import Drawing</button>
             <button type="button" class="navItem" id="navScratch">New from scratch</button>
             <button type="button" class="navItem" id="navOpenExisting">Open existing</button>
             <div id="projectList" class="projectList muted">—</div>
+            <p class="libHint" id="projectStatusHint">Project status shown in the top bar.</p>
+          </details>
+          <details class="navSection libSection" open>
+            <summary>Equipment library</summary>
+            <input type="search" id="libSearch" class="libSearch" placeholder="Search pumps, tanks, valves…" />
+            <div class="libList" id="libList"></div>
+            <p class="libHint">Drag onto canvas · creates real model equipment · edit in Inspector</p>
           </details>
           <details class="navSection" open>
-            <summary>Equipment library</summary>
-            <input type="search" id="libSearch" class="libSearch" placeholder="Search components…" />
-            <div class="libList" id="libList"></div>
-            <p class="libHint">Drag onto canvas · creates real model equipment</p>
-          </details>
-          <details class="navSection">
             <summary>Design tools</summary>
             <button type="button" class="navItem" id="btnConnectMode">Connect equipment</button>
+            <label class="libHint" for="connectKind">Connection kind
+              <select id="connectKind" class="libSearch">
+                <option value="process">Process</option>
+                <option value="instrument">Instrument</option>
+                <option value="mechanical">Mechanical</option>
+                <option value="electrical">Electrical</option>
+                <option value="control">Control</option>
+                <option value="signal">Signal</option>
+              </select>
+            </label>
+            <button type="button" class="navItem" id="btnAutoLayout">Auto-layout</button>
             <button type="button" class="navItem" data-view="connect">Connect status <span class="navBadge">optional</span></button>
-            <p class="libHint">Exports / AB PLC remain placeholders — see Settings.</p>
+            <p class="libHint">Place · connect (ports auto-pick) · P&amp;ID/SCADA toggle shares one model · lock L · rotate R.</p>
           </details>
         </div>
 
-        <div class="sideCtx hidden" data-ws-side="logic">
+        <div class="sideCtx hidden" data-ws-side="engineer">
           <details class="navSection" open>
-            <summary>Logic</summary>
-            <button type="button" class="navItem active" id="navInterlocks">Interlocks</button>
-            <p class="libHint">Conditions · inhibits · live Runtime state. Selection focuses equipment.</p>
-            <p class="libHint unfinished">Control sequence authoring UI unfinished — use model interlocks + Runtime logic observability.</p>
+            <summary>Equipment &amp; logic</summary>
+            <button type="button" class="navItem" id="navInterlocks">Interlocks</button>
+            <button type="button" class="navItem" id="navIoMap">I/O map</button>
+            <button type="button" class="navItem" id="navLogicObs">Logic observability</button>
+            <button type="button" class="navItem" id="navEngineerGen">Controls codegen</button>
+            <p class="libHint">Select equipment on the canvas — Inspector shows Overview, Control, I/O, Interlocks.</p>
+            <p class="libHint">P6 Engineer generates preliminary ST / I/O — engineer approval required; no silent overwrite.</p>
+            <p class="libHint unfinished">Control sequence authoring unfinished — use model interlocks + Runtime logic observability.</p>
           </details>
-        </div>
-
-        <div class="sideCtx hidden" data-ws-side="io">
           <details class="navSection" open>
-            <summary>Signals</summary>
+            <summary>Signals filter</summary>
             <input type="search" id="ioSearch" class="libSearch" placeholder="Filter tags…" />
             <label class="chk"><input type="checkbox" id="ioSelectedOnly" checked /> Selected equipment only</label>
             <button type="button" class="navItem" id="btnIoRefresh">Refresh signals</button>
-            <p class="libHint">Live Runtime tags from the canonical model. Right panel shows I/O for selection.</p>
           </details>
         </div>
 
@@ -136,6 +157,12 @@
             <button type="button" class="navItem" id="btnSnapshot">Engineering snapshot</button>
             <p class="libHint">Catalog from `/api/verify/tests`. One real FAT today — no fake pass/fail.</p>
           </details>
+          <details class="navSection" open>
+            <summary>Export package</summary>
+            <button type="button" class="navItem" id="btnExportPackage">Export engineering package</button>
+            <button type="button" class="navItem" id="btnExportConnect">Connect / Ignition status</button>
+            <p class="libHint">Exports stay gated until engineering approval. Allen-Bradley export is a placeholder.</p>
+          </details>
         </div>
 
         <details class="navSection" id="limitsSection">
@@ -161,7 +188,14 @@
               <button type="button" id="btnZoomSel" title="Zoom to selection">Sel</button>
               <button type="button" id="btnZoomIn" title="Zoom in">+</button>
               <button type="button" id="btnZoomOut" title="Zoom out">−</button>
+              <button type="button" id="btnRotate" title="Rotate 90° (R)">↻</button>
+              <button type="button" id="btnMirror" title="Mirror horizontal">⇄</button>
+              <div class="symbolModeToggle" id="symbolModeToggle" role="group" aria-label="Symbol display mode" data-symbol-mode="pid">
+                <button type="button" id="btnSymPid" class="active" data-symbol-mode="pid" title="P&amp;ID schematic symbols">P&amp;ID</button>
+                <button type="button" id="btnSymScada" data-symbol-mode="scada" title="SCADA status / levels / alarms">SCADA</button>
+              </div>
               <label class="chk"><input type="checkbox" id="chkSnap" checked /> Snap</label>
+              <label class="chk" title="Prevent accidental moves"><input type="checkbox" id="chkDragLock" /> Lock drag</label>
               <details class="advCanvas">
                 <summary>More</summary>
                 <label class="chk"><input type="checkbox" id="chkGuides" checked /> Guides</label>
@@ -170,6 +204,7 @@
                 <label class="chk"><input type="checkbox" id="chkLayerInst" checked /> Instr</label>
                 <label class="chk"><input type="checkbox" id="chkLayerProc" checked /> Process</label>
                 <label class="chk"><input type="checkbox" id="chkLayerSig" checked /> Signal</label>
+                <label class="chk"><input type="checkbox" id="chkShowPorts" checked /> Ports</label>
               </details>
             </div>
             <div id="canvasMeta">—</div>
@@ -212,6 +247,7 @@
               <div class="toolBarActions">
                 <button type="button" id="btnIlkRefresh">Refresh</button>
                 <button type="button" id="btnIlkShowMap">Show on map</button>
+                <button type="button" id="btnOpenEngineer">Controls codegen</button>
               </div>
             </div>
             <div class="ilkBody">
@@ -222,9 +258,31 @@
               </aside>
               <section class="ilkDetailPane">
                 <h4 id="ilkDetailTitle">Select an interlock</h4>
-                <p class="muted" id="ilkDetailSub">Condition chain and inhibited equipment — same model as Design / Simulate.</p>
+                <p class="muted" id="ilkDetailSub">Condition chain and inhibited equipment — same model as Design / Engineer / Simulate.</p>
                 <div id="ilkDetail" class="ilkDetail"></div>
               </section>
+            </div>
+          </div>
+
+          <div class="engineerPanel hidden" id="engineerPanel">
+            <div class="wsPanelHead">
+              <strong>P6 Engineer</strong>
+              <span class="muted">Preliminary templates · I/O · ST</span>
+              <div class="toolBarActions">
+                <button type="button" id="btnEngTemplates">Templates</button>
+                <button type="button" id="btnEngIo">I/O list</button>
+                <button type="button" id="btnEngStrategies">Strategies</button>
+                <button type="button" class="primary" id="btnEngSt">Generate ST</button>
+                <button type="button" id="btnEngAcceptWt">Water-transfer path</button>
+                <button type="button" id="btnEngBackIlk">Interlocks</button>
+              </div>
+            </div>
+            <p class="warn engHonesty">
+              Outputs are ENGINEERING_INFERENCE until reviewed. No invented PLC addresses.
+              Simulated E-stop is not certified safety. ST is not a deployable multi-vendor package.
+            </p>
+            <div class="engBody" id="engBody">
+              <p class="muted">Select an action above — same canonical project as Design / Simulate / Verify.</p>
             </div>
           </div>
 
@@ -238,7 +296,7 @@
             </div>
           </div>
 
-          <div class="verifyPanelPanel hidden" id="verifyWorkspacePanel">
+          <div class="verifyWorkspacePanel hidden" id="verifyWorkspacePanel">
             <div class="wsPanelHead">
               <strong>P6 Verify</strong>
               <span class="muted">FAT catalog · assertion evidence</span>
@@ -256,35 +314,53 @@
 
           <div class="ingestPanel hidden" id="ingestPanel">
             <div class="wsPanelHead">
-              <strong>Import · Engineering diagram</strong>
-              <span class="muted">Extract · confirm · place on canvas</span>
+              <strong>Import · P6 Vision</strong>
+              <span class="muted">Upload · extract · review · promote (never silent)</span>
               <div class="toolBarActions">
-                <button type="button" id="btnIngestPromote" class="primary" disabled>Add approved equipment</button>
+                <button type="button" id="btnIngestPromote" class="primary" disabled>Promote confirmed</button>
+                <button type="button" id="btnIngestManual">Manual reconstruct</button>
                 <button type="button" id="btnCloseIngest">Done</button>
               </div>
             </div>
             <div class="ingestBody">
+              <ol class="ingestSteps" id="ingestSteps" aria-label="Import wizard steps">
+                <li data-step="1" class="active">1 Upload</li>
+                <li data-step="2">2 Extract</li>
+                <li data-step="3">3 Review</li>
+                <li data-step="4">4 Connections</li>
+                <li data-step="5">5 Gaps</li>
+                <li data-step="6">6 Promote</li>
+              </ol>
               <div class="ingestToolbar">
-                <input type="file" id="ingestFile" accept=".pdf,.png,.jpg,.jpeg,.csv,image/*,application/pdf,text/plain,.txt" />
+                <input type="file" id="ingestFile" multiple accept=".pdf,.png,.jpg,.jpeg,.svg,.csv,image/*,image/svg+xml,application/pdf,text/plain,.txt" />
                 <button type="button" id="btnIngestExtract">Extract</button>
-                <button type="button" id="btnIngestSelectAll">Confirm all</button>
+                <button type="button" id="btnIngestSelectAll">Confirm all tags</button>
+                <button type="button" id="btnIngestReject">Reject selected</button>
+                <button type="button" id="btnIngestMerge" title="Merge selected tags into the first">Merge</button>
                 <label class="chk"><input type="checkbox" id="ingestApprove" /> Mark approved</label>
                 <label class="chk" title="Hide tags that match bundled demo fixtures"><input type="checkbox" id="ingestHideDemo" checked /> Hide demo/reference tags</label>
+                <label class="chk" title="Retain uploaded originals as project document references"><input type="checkbox" id="ingestRetain" checked /> Keep originals</label>
                 <span class="muted" id="ingestMeta">No file yet</span>
               </div>
+              <div class="ingestProgress muted" id="ingestProgress" hidden></div>
               <p class="warn" id="ingestWarn">
-                Tags stay <b>UNVERIFIED</b> until you confirm. Prefer <b>text / PDF / CSV</b> —
-                scanned image OCR is unfinished. Promote places confirmed tags on the map and rebinds Runtime.
+                Tags and connections stay <b>UNVERIFIED</b> until you confirm. Prefer <b>text / searchable PDF / SVG / CSV</b> —
+                scanned image OCR is unfinished. Ambiguous topology is never silently approved.
               </p>
-              <div class="ingestGrid">
+              <div class="ingestGrid ingestGrid3">
                 <section class="ingestPane">
-                  <h4>Document metadata</h4>
+                  <h4>Source document</h4>
                   <img id="ingestPreview" alt="" hidden />
-                  <pre id="ingestSource" class="mono ingestDocMeta">(Choose a P&amp;ID PDF, drawing image, or equipment list.)</pre>
+                  <pre id="ingestSource" class="mono ingestDocMeta">(Choose P&amp;ID PDF, SVG, drawing image, or equipment list — multi-file OK.)</pre>
                 </section>
                 <section class="ingestPane">
-                  <h4>Equipment table · confirm tags</h4>
+                  <h4>Equipment · accept / correct / reclassify</h4>
                   <div id="ingestList" class="ingestList ingestTable"></div>
+                </section>
+                <section class="ingestPane">
+                  <h4>Connections · gaps</h4>
+                  <div id="ingestConnList" class="ingestList"></div>
+                  <div id="ingestGapList" class="ingestGaps"></div>
                 </section>
               </div>
             </div>
@@ -308,7 +384,16 @@
               </select>
             </label>
           </div>
-          <span class="muted simBarHint" id="simBarHint">Simulation controls · same Runtime as canvas</span>
+          <div class="simPlantOps" id="simPlantOps" title="Operator commands for the bound plant (sim only)">
+            <span class="opsLabel">Plant</span>
+            <button type="button" data-plant="clear_high" title="Clear high-level interlock (LSH / LT.High)">Clear LSH</button>
+            <button type="button" data-plant="clear_estop" title="Restore E-stop healthy (sim)">Clear E-stop</button>
+            <button type="button" data-plant="reset_trip" title="System.Reset - clear trip latch M1">Reset trip</button>
+            <button type="button" class="accent" data-plant="start_transfer" title="Pulse System.Start - begins transfer when permissives clear">START TRANSFER</button>
+            <button type="button" class="warn" data-plant="estop" title="Activate E-stop (sim model only)">E-stop</button>
+          </div>
+          <span class="simBindWarn" id="simBindWarn" hidden></span>
+          <span class="muted simBarHint" id="simBarHint">Clear LSH → START TRANSFER · sim only</span>
         </div>
 
         <div class="ctxMenu hidden" id="ctxMenu" role="menu"></div>
@@ -322,12 +407,17 @@
         <div class="inspectorTabs" id="inspTabs">
           <button type="button" class="active" data-tab="overview">Overview</button>
           <button type="button" data-tab="control">Control</button>
-          <button type="button" data-tab="logic">Logic</button>
-          <button type="button" data-tab="interlocks">Interlocks</button>
           <button type="button" data-tab="io">I/O</button>
-          <button type="button" data-tab="xray">X-Ray</button>
-          <button type="button" data-tab="alarms">Alarms</button>
+          <button type="button" data-tab="interlocks">Interlocks</button>
         </div>
+        <details class="advEngineering" id="advEngineering">
+          <summary>Advanced Engineering</summary>
+          <div class="advEngTabs">
+            <button type="button" data-tab="xray">X-Ray</button>
+            <button type="button" data-tab="logic">Logic / IR</button>
+            <button type="button" data-tab="alarms">Alarms / CEM</button>
+          </div>
+        </details>
         <div class="inspectorBody" id="inspBody">
           <p class="muted">No selection.</p>
         </div>
@@ -367,38 +457,49 @@
       </div>
     </div>
 
-    <footer class="studioConsole collapsed" id="console">
-      <div class="consoleBar">
-        <div class="activityTabs" role="tablist">
-          <button type="button" class="active" data-actab="events">Events</button>
-          <button type="button" data-actab="alarms">Alarms</button>
-          <button type="button" data-actab="verify">Verify</button>
-          <button type="button" data-actab="timeline">Timeline</button>
+    <footer class="studioStatusBar collapsed" id="console">
+      <div class="statusBarRow">
+        <div class="statusChips" id="statusChips" aria-live="polite">
+          <span class="statusChip" id="chipSave" title="Layout save">Save · —</span>
+          <span class="statusChip" id="chipSim" title="Simulation">Sim · —</span>
+          <span class="statusChip" id="chipAlarms" title="Active alarms">Alarms · 0</span>
+          <span class="statusChip" id="chipWarn" title="Engineering warnings">Warnings · 0</span>
+          <span class="statusChip" id="chipVerify" title="Last verify result">Verify · —</span>
         </div>
-        <div>
+        <div class="statusBarActions">
+          <div class="activityTabs" role="tablist">
+            <button type="button" class="active" data-actab="events">Events</button>
+            <button type="button" data-actab="alarms">Alarms</button>
+            <button type="button" data-actab="verify">Verify</button>
+            <button type="button" data-actab="timeline">Timeline</button>
+          </div>
           <button type="button" id="btnClearLog">Clear</button>
           <button type="button" id="btnToggleConsole">Expand</button>
         </div>
       </div>
-      <div class="consoleLog" id="consoleLog" data-panel="events"></div>
-      <div class="consoleLog hidden" id="alarmLog" data-panel="alarms"></div>
-      <div class="consoleLog hidden" id="verifyLog" data-panel="verify"></div>
-      <div class="timelinePanel hidden" id="timelinePanel" data-panel="timeline">
-        <div class="timelineControls">
-          <label class="chk"><input type="checkbox" id="chkRecord" checked /> Record</label>
-          <button type="button" id="btnLiveMode">Live</button>
-          <button type="button" id="btnClearHistory">Clear history</button>
+      <div class="statusBarExpand">
+        <div class="consoleLog" id="consoleLog" data-panel="events"></div>
+        <div class="consoleLog hidden" id="alarmLog" data-panel="alarms"></div>
+        <div class="consoleLog hidden" id="verifyLog" data-panel="verify"></div>
+        <div class="timelinePanel hidden" id="timelinePanel" data-panel="timeline">
+          <div class="timelineControls">
+            <label class="chk"><input type="checkbox" id="chkRecord" checked /> Record</label>
+            <button type="button" id="btnLiveMode">Live</button>
+            <button type="button" id="btnClearHistory">Clear history</button>
+          </div>
+          <p class="warn timelineLimitWarn" id="timelineLimitWarn">
+            Playback overlays recorded signals on the canvas — it does <b>not</b> rewind plant physics.
+          </p>
+          <input type="range" id="timelineScrub" min="0" max="0" value="0" />
+          <div class="timelineMeta" id="timelineMeta">No recorded frames yet — run the simulation.</div>
+          <div class="consoleLog" id="timelineLog"></div>
         </div>
-        <p class="warn timelineLimitWarn" id="timelineLimitWarn">
-          Playback overlays recorded signals on the canvas — it does <b>not</b> rewind plant physics.
-        </p>
-        <input type="range" id="timelineScrub" min="0" max="0" value="0" />
-        <div class="timelineMeta" id="timelineMeta">No recorded frames yet — run the simulation.</div>
-        <div class="consoleLog" id="timelineLog"></div>
       </div>
     </footer>
   </div>
-  <script src="verify_ui.js"></script>
-  <script src="studio.js"></script>
+  <script src="verify_ui.js?v=20261014a"></script>
+  <script src="symbols/svg.js?v=20261014a"></script>
+  <script src="symbols/registry.js?v=20261014a"></script>
+  <script src="studio.js?v=20261014c"></script>
 </body>
 </html>

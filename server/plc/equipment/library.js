@@ -57,6 +57,22 @@ export const EquipmentLibrary = {
     timing: {},
     initialState: "ok"
   },
+  LevelTransmitter: {
+    type: "level_transmitter",
+    signals: ["Pv", "LevelPct", "High", "Low", "Fault"],
+    states: ["ok", "alarm", "fault"],
+    units: "%",
+    timing: {},
+    initialState: "ok"
+  },
+  FlowTransmitter: {
+    type: "flow_transmitter",
+    signals: ["Pv", "FlowGpm", "Fault"],
+    states: ["ok", "fault"],
+    units: "gpm",
+    timing: {},
+    initialState: "ok"
+  },
   TemperatureTransmitter: {
     type: "temperature_transmitter",
     signals: ["Pv", "Fault"],

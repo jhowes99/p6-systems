@@ -10,7 +10,8 @@ export class IOModel {
     this.analogOutputs = { B0: 0, B1: 0, B2: 0, B3: 0 };
 
     // Fault injection (OT commissioning helpers)
-    // Map varName -> { var, mode:"force"|"stuck", value:boolean, at:number }
+    // Map varName -> { var, mode:"force"|"stuck", value:boolean|number, at:number }
+    // Digital I/Q/M: boolean value. Analog A/B: numeric value.
     this.faults = {};
 
     // Strict PLC mode: disallow dynamic IO growth during runtime.
@@ -91,7 +92,7 @@ export class IOModel {
   }
   setFault({ var: name, mode, value }) {
     const v = this._normVar(name);
-    if (!this._isVarName(v)) throw new Error(`Invalid var '${name}'. Expected I#, Q#, or M# (e.g. I0, Q3, M12).`);
+    if (!this._isVarName(v)) throw new Error(`Invalid var '${name}'. Expected I/Q/M/A/B# (e.g. I0, Q3, A1).`);
     const m = String(mode || "").trim().toLowerCase();
     if (m !== "force" && m !== "stuck") throw new Error(`Invalid mode '${mode}'. Use 'force' or 'stuck'.`);
 
@@ -99,7 +100,16 @@ export class IOModel {
     if (!bank.bank) throw new Error(`Unsupported var '${v}'.`);
     bank.ensure();
 
-    this.faults[v] = { var: v, mode: m, value: !!value, at: Date.now() };
+    const isAnalog = v.startsWith("A") || v.startsWith("B");
+    let coerced;
+    if (isAnalog) {
+      coerced = Number(value);
+      if (!Number.isFinite(coerced)) throw new Error(`Analog fault value must be a number.`);
+    } else {
+      coerced = !!value;
+    }
+
+    this.faults[v] = { var: v, mode: m, value: coerced, at: Date.now(), analog: isAnalog };
     return this.faults[v];
   }
   clearFault(name) {
@@ -110,11 +120,17 @@ export class IOModel {
   effectiveValue(name) {
     const v = this._normVar(name);
     const f = this.faults[v];
-    if (f) return !!f.value;
+    const isAnalog = v.startsWith("A") || v.startsWith("B");
+    if (f) return isAnalog ? Number(f.value) : !!f.value;
     const bank = this._bankFor(v);
-    if (!bank.bank) return false;
+    if (!bank.bank) return isAnalog ? 0 : false;
     bank.ensure();
-    return !!bank.obj[v];
+    return isAnalog ? Number(bank.obj[v] ?? 0) : !!bank.obj[v];
+  }
+
+  /** Effective analog (A/B) including force/stuck faults. */
+  effectiveAnalog(name) {
+    return Number(this.effectiveValue(name));
   }
 
   // Input image (I) used for a scan: apply any forced/stuck faults.

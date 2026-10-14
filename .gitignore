@@ -34,6 +34,10 @@ _extracted/
 server/data/snapshots/
 server/data/packets/
 server/data/canonical/
+server/data/uploads/
+server/data/exports/
+server/data/verify/
+server/data/_smoke_engineer/
 server/data/_smoke_tmp/
 server/audit.log
 server/traceability_out/

@@ -128,6 +128,18 @@ plc.reset();
 assert(plc.clock.timeMs === 0, "reset clears sim clock");
 assert(bridge.getSignal("M1.Run").currentValue === false, "initials restored");
 
+// --- Sim layer ≠ equipment: start() does not write inputs ---
+io.setInput("I1", false);
+plc.start();
+assert(plc.mode === "running", "sim start");
+assert(io.inputs.I1 === false, "sim start must not pulse equipment inputs");
+plc.pause();
+
+// --- Analog fault force ---
+io.setFault({ var: "A0", mode: "force", value: 12.5 });
+assert(io.effectiveValue("A0") === 12.5, "analog force");
+io.clearFault("A0");
+
 setDataRootOverride(null);
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("Phase 3 smoke_test_runtime: PASS");
@@ -137,5 +149,7 @@ console.log(JSON.stringify({
   tonSimClock: true,
   projectBind: true,
   signalSync: true,
-  reset: true
+  reset: true,
+  simVsEquipment: true,
+  analogFault: true
 }));
