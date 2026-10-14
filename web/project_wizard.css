@@ -1,0 +1,5 @@
+.rowTop { display:flex; align-items:flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rowBtns { display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
+.status { margin-top: 10px; }
+.hint { margin-top: 8px; }
+.pre { background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 10px; overflow:auto; max-height: 420px; }

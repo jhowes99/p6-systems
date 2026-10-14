@@ -1,0 +1,256 @@
+/* P6 Universal Shell — Master Spec §5–§6 (shared with Studio tokens) */
+:root {
+  --p6-bg0: #071426;
+  --p6-bg1: #10243C;
+  --p6-bg2: #0d1b2d;
+  --p6-panel: #12263d;
+  --p6-panel2: #16304c;
+  --p6-border: rgba(40, 197, 255, 0.14);
+  --p6-blue: #168FF0;
+  --p6-cyan: #28C5FF;
+  --p6-teal: #20B8A6;
+  --p6-green: #22C55E;
+  --p6-amber: #F59E0B;
+  --p6-red: #EF4444;
+  --p6-ink: #e8f0f7;
+  --p6-muted: #8aa0b5;
+  --p6-font: "DM Sans", "Segoe UI", system-ui, sans-serif;
+  --p6-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --p6-header-h: 56px;
+  --p6-nav-w: 240px;
+
+  /* Legacy aliases used by older page CSS */
+  --steel: #168FF0;
+  --deep: #071426;
+  --navy: #10243C;
+  --bgCanvas: #0d1b2d;
+  --bg0: var(--p6-bg0);
+  --bg1: var(--p6-bg1);
+  --card: var(--p6-panel);
+  --muted: var(--p6-muted);
+  --text: var(--p6-ink);
+  --border: var(--p6-border);
+  --ok: var(--p6-green);
+  --danger: var(--p6-red);
+  --radius: 8px;
+  --pad: 14px;
+  --tap: 44px;
+  --brand-font: var(--p6-font);
+}
+
+body.p6-app {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--p6-font);
+  color: var(--p6-ink);
+  background:
+    radial-gradient(900px 500px at 10% -10%, rgba(22, 143, 240, 0.12), transparent 55%),
+    radial-gradient(800px 480px at 100% 0%, rgba(32, 184, 166, 0.08), transparent 50%),
+    linear-gradient(180deg, var(--p6-bg0), var(--p6-bg2));
+}
+
+body.p6-app #appShell {
+  display: contents;
+}
+
+.p6Header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  height: var(--p6-header-h);
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0 0.85rem;
+  background: linear-gradient(180deg, #0e2035, var(--p6-bg1));
+  border-bottom: 1px solid var(--p6-border);
+}
+
+.p6Brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.p6Brand img {
+  height: 40px;
+  width: auto;
+  display: block;
+}
+
+.p6ProjectBox {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.p6ProjectName {
+  font-weight: 700;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p6ProjectMeta {
+  font-size: 0.68rem;
+  color: var(--p6-muted);
+  font-family: var(--p6-mono);
+}
+
+.p6HeaderPills {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.p6Pill {
+  font-size: 0.65rem;
+  font-family: var(--p6-mono);
+  padding: 0.25rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--p6-border);
+  color: var(--p6-muted);
+  background: rgba(7, 20, 38, 0.55);
+}
+.p6Pill.run { color: var(--p6-green); border-color: rgba(34, 197, 94, 0.4); }
+.p6Pill.pause { color: var(--p6-amber); border-color: rgba(245, 158, 11, 0.4); }
+.p6Pill.stop { color: var(--p6-muted); }
+
+.p6HeaderActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.p6Btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--p6-border);
+  background: var(--p6-panel2);
+  color: var(--p6-ink);
+  text-decoration: none;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.p6Btn.primary {
+  background: linear-gradient(180deg, #1a9cf5, #1478c8);
+  border-color: transparent;
+}
+.p6Btn.ghost {
+  background: transparent;
+  color: var(--p6-cyan);
+}
+
+.p6SideNav {
+  position: fixed;
+  top: var(--p6-header-h);
+  left: 0;
+  bottom: 0;
+  width: var(--p6-nav-w);
+  z-index: 50;
+  overflow: auto;
+  background: #0a1828;
+  border-right: 1px solid var(--p6-border);
+  padding: 0.65rem 0.55rem 1.5rem;
+}
+
+.p6NavGroup { margin-bottom: 0.85rem; }
+.p6NavGroupLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--p6-muted);
+  padding: 0.35rem 0.45rem;
+  font-weight: 700;
+}
+.p6NavItem {
+  display: block;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  color: var(--p6-ink);
+  text-decoration: none;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+}
+.p6NavItem:hover {
+  background: rgba(22, 143, 240, 0.12);
+  border-color: rgba(40, 197, 255, 0.18);
+}
+.p6NavItem.active {
+  background: rgba(22, 143, 240, 0.2);
+  border-color: rgba(40, 197, 255, 0.35);
+  color: #fff;
+}
+
+/* Page content offset for fixed nav */
+body.p6-app > main,
+body.p6-app > .wrap,
+body.p6-app > .page,
+body.p6-app > .content {
+  margin-left: var(--p6-nav-w);
+  padding: 1rem 1.25rem 2rem;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* Soften legacy light cards on dark shell */
+body.p6-app .wrap,
+body.p6-app main.wrap {
+  color: var(--p6-ink);
+}
+body.p6-app .wrap h1,
+body.p6-app .wrap h2,
+body.p6-app .wrap h3 {
+  color: var(--p6-ink);
+}
+body.p6-app .wrap .small,
+body.p6-app .wrap .muted {
+  color: var(--p6-muted);
+}
+body.p6-app .wrap pre,
+body.p6-app .wrap .card,
+body.p6-app .wrap .panel,
+body.p6-app .wrap .verifyTestCard,
+body.p6-app .wrap .stats > div,
+body.p6-app .wrap details {
+  background: rgba(18, 38, 61, 0.9) !important;
+  border-color: var(--p6-border) !important;
+  color: var(--p6-ink);
+}
+body.p6-app .wrap input,
+body.p6-app .wrap select,
+body.p6-app .wrap textarea,
+body.p6-app .wrap button {
+  background: #071426;
+  color: var(--p6-ink);
+  border: 1px solid var(--p6-border);
+  border-radius: 6px;
+}
+body.p6-app .wrap button {
+  cursor: pointer;
+  padding: 0.4rem 0.75rem;
+}
+body.p6-app .wrap a { color: var(--p6-cyan); }
+
+@media (max-width: 900px) {
+  .p6SideNav { width: 200px; }
+  body.p6-app > main,
+  body.p6-app > .wrap { margin-left: 200px; }
+  .p6ProjectMeta { display: none; }
+}
+@media (max-width: 720px) {
+  .p6SideNav { display: none; }
+  body.p6-app > main,
+  body.p6-app > .wrap { margin-left: 0; }
+  .p6HeaderActions .p6Btn:not(.primary) { display: none; }
+}
+
+/* Legacy class stubs so old markup does not explode */
+.appShell, .appShellBar, .toolbar { display: none; }
+
+/* Embedded content mode — no nested Studio/shell chrome */
+body.p6-embed #appShell,
+body.p6-embed .p6Header,
+body.p6-embed .p6SideNav { display: none !important; }
+body.p6-embed > main,
+body.p6-embed > .wrap { margin-left: 0 !important; }

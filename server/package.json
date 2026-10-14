@@ -1,0 +1,28 @@
+{
+  "name": "p6-app",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test:runtime": "node plc/smoke_test_runtime.js",
+    "test:water": "node plc/equipment/smoke_test_water_transfer.js",
+    "test:model": "node model/smoke_test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
+    "docx": "^9.5.0",
+    "express": "^4.19.2",
+    "jszip": "^3.10.1",
+    "mqtt": "^5.10.1",
+    "multer": "^1.4.5-lts.1",
+    "node-opcua": "^2.156.0",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^4.10.38",
+    "pdfkit": "^0.15.0",
+    "tesseract.js": "^5.0.5",
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,9 @@
+Tag,IO Type,Address,Service,Remark
+PSH-101,DI,I0.0,Pressure switch high,P&ID 101
+PT-102,AI,IW10,Pressure transmitter,
+XV-101,DO,Q0.0,Motorized valve,
+XV-401,DO,Q0.1,EIV,
+SD-201,,,Shutdown logic,
+LS-301,DI,I0.2,Level switch,
+FS-401,DI,I0.3,Flow switch,
+SPARE-01,DI,I0.4,,Spare future

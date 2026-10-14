@@ -1,0 +1,171 @@
+* { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+body { margin: 0; color: #0f172a; }
+.wrap { padding: 14px; display:grid; gap: 14px; max-width: 980px; margin: 0 auto; }
+.grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.analogRow { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.analogLabel { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.analogSlider { width: 80px; }
+.analogVal { min-width: 28px; font-weight: 700; }
+.analogDisplay { padding: 6px 10px; border-radius: 8px; background: rgba(15,23,42,.05); font-size: 13px; margin-right: 8px; }
+.btn { padding: 12px; border:1px solid rgba(15,23,42,.14); border-radius: 14px; cursor:pointer; background: rgba(255,255,255,.92); font-weight: 950; }
+.on { border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.10); }
+.off { border-color: rgba(185,28,28,.35); background: rgba(185,28,28,.08); }
+pre { background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 8px; overflow:auto; }
+.small { font-size: 12px; color: #444; }
+.row { display:flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.card2 { border: 1px solid #ddd; border-radius: 12px; padding: 12px; background: #fff; }
+.btn.secondary { background: #fff; }
+.btn.sel { box-shadow: 0 0 0 3px rgba(29,78,216,0.16); border-color: rgba(29,78,216,0.35); }
+.btn.forced { border-style: dashed; }
+
+.input { padding: 10px 12px; border: 1px solid rgba(15,23,42,.16); border-radius: 12px; background: rgba(255,255,255,.92); font-weight: 800; }
+.faultForm { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.faultList { margin-top: 10px; display:grid; gap: 8px; }
+.faultItem { border: 1px solid #eee; border-radius: 12px; padding: 10px; display:flex; gap: 10px; align-items: center; justify-content: space-between; }
+.faultItem .meta { display:flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.explainPanel { margin-top: 10px; border: 1px solid #eee; border-radius: 12px; padding: 10px; background: rgba(15,23,42,.03); }
+.explainPanel pre { margin: 0; }
+
+.diagramCard { border: 1px solid #ddd; border-radius: 12px; padding: 12px; background: #fff; }
+.diagramWrap { width: 100%; overflow: auto; border: 1px solid #e6e6e6; border-radius: 12px; background: linear-gradient(180deg, #fbfbff, #f7fafc); margin-top: 10px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.02); }
+.diagramSvg { width: 940px; height: 260px; display: block; }
+.diagramExplain { margin-top: 10px; display: grid; gap: 8px; }
+.exRow { border: 1px solid #eee; border-radius: 12px; padding: 10px; background: #fff; }
+.exRow.active { border-color: #1d4ed8; box-shadow: 0 0 0 2px rgba(29,78,216,0.12); }
+.exTitle { display:flex; justify-content: space-between; align-items: center; gap: 10px; }
+.exTitle strong { font-size: 13px; }
+.exBody { margin-top: 6px; font-size: 12px; color:#222; }
+.exBlockers { margin-top: 6px; font-size: 12px; color:#444; }
+.exBlockers .bad { color:#9a3412; font-weight:700; }
+.exBlockers .good { color:#166534; font-weight:700; }
+.legend { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pill { display:inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(15,23,42,.14); background: rgba(255,255,255,.92); font-weight: 950; }
+.pill.on { border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.10); color:#166534; }
+.pill.off { border-color: rgba(185,28,28,.35); background: rgba(185,28,28,.08); color:#9a3412; }
+.pill.active { border-color: rgba(47,93,138,.40); background: rgba(47,93,138,.12); color: var(--steel); }
+.pill.run { border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.10); color:#166534; }
+.pill.stop { border-color: rgba(148,163,184,.55); background: rgba(148,163,184,.14); color:#334155; }
+.pill.fault { border-color: rgba(185,28,28,.45); background: rgba(185,28,28,.12); color:#9a3412; }
+.pill.inhib { border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.14); color:#92400e; }
+
+.beat { width: 10px; height: 10px; border-radius: 999px; border: 1px solid rgba(15,23,42,.18); background: rgba(148,163,184,.18); display:inline-block; }
+.beat.on { background: rgba(22,163,74,.55); box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+
+.d-node { stroke: #333; stroke-width: 1; fill: #fff; }
+.d-node.on { stroke: #16a34a; fill: rgba(22,163,74,.10); }
+.d-node.off { stroke: rgba(185,28,28,.55); fill: rgba(185,28,28,.08); }
+.d-node { rx: 10; ry: 10; }
+.d-node.rung { stroke: #64748b; fill: #ffffff; }
+.d-node.rung.active { stroke: var(--steel); fill: rgba(47,93,138,.10); stroke-width: 2.5; }
+.d-edge { stroke: #cbd5e1; stroke-width: 2; fill: none; }
+.d-edge.active { stroke: #0f172a; stroke-width: 3; }
+.d-edge.cond { stroke: #94a3b8; }
+.d-edge.act { stroke: #cbd5e1; }
+.d-edge.cond.active { stroke: var(--energized); }
+.d-edge.act.active { stroke: var(--steel); }
+.d-label { font-size: 12px; fill: #0f172a; }
+
+/* Interlock styles for Test page */
+.interlockView {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.interlockCard {
+  border: 1px solid rgba(15,23,42,.14);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255,255,255,.92);
+}
+
+.interlockCard.on {
+  border-color: rgba(22,163,74,.35);
+  background: rgba(22,163,74,.08);
+}
+
+.interlockCard.off {
+  border-color: rgba(185,28,28,.35);
+  background: rgba(185,28,28,.06);
+}
+
+.interlockCard.selected {
+  border-color: rgba(29,78,216,.5);
+  box-shadow: 0 0 0 3px rgba(29,78,216,.12);
+}
+
+.interlockDetail {
+  background: rgba(15,23,42,.02);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.chips {
+  min-height: 24px;
+}
+
+.interlockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.interlockTitle {
+  font-weight: 900;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.interlockStatus {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  background: rgba(15,23,42,.1);
+  color: #0f172a;
+}
+
+.interlockStatus.on {
+  background: rgba(22,163,74,.2);
+  color: #166534;
+}
+
+.interlockStatus.off {
+  background: rgba(239,68,68,.2);
+  color: #9a3412;
+}
+
+.interlockPerms {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15,23,42,.1);
+}
+
+.permItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.permItem.satisfied {
+  color: #166534;
+}
+
+.permItem.blocking {
+  color: #9a3412;
+}
+
+.permDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+  flex-shrink: 0;
+}

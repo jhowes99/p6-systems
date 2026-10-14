@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Ignition Engineering Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body data-app-active="engineering">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <h1 style="margin:0;">Ignition Engineering Generator</h1>
+    <p class="small">
+      Milestone A — reusable UDT definitions + instances from the <b>canonical P6 model</b>.
+      Engineer must approve before export. Does not auto-deploy to Gateway.
+      Docs: <code>docs/IGNITION_INTEGRATION.md</code>
+    </p>
+    <p id="status" class="small"></p>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:1rem 0;">
+      <button id="generate" type="button">Generate pump UDT package</button>
+      <button id="reload" type="button">Reload</button>
+      <button id="approve" type="button" disabled>Approve for export</button>
+      <button id="exportPreview" type="button">Download preview</button>
+      <button id="exportApproved" type="button" disabled>Download approved</button>
+      <a class="small" href="/tags.html">Tag map →</a>
+      <a class="small" href="/connect.html">Connect →</a>
+    </div>
+    <p id="meta" class="small"></p>
+    <pre id="out" class="small" style="background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;max-height:70vh;overflow:auto;"></pre>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    const out = document.getElementById("out");
+    const meta = document.getElementById("meta");
+    let pkg = null;
+
+    function render(p) {
+      pkg = p;
+      const v = p?.validation || {};
+      meta.textContent = p
+        ? `approved=${!!p.approved} types=${(p.udtTypes||[]).map(t=>t.name).join(",")} instances=${(p.udtInstances||[]).map(i=>i.name).join(",")} validation=${v.ok ? "OK" : "FAIL"} warnings=${(v.warnings||[]).length}`
+        : "No package yet";
+      document.getElementById("approve").disabled = !p || !!p.approved || !v.ok;
+      document.getElementById("exportApproved").disabled = !p || !p.approved;
+      out.textContent = JSON.stringify(p, null, 2);
+    }
+
+    async function loadStatus() {
+      const r = await fetch("/api/connect/engineering/status");
+      document.getElementById("status").textContent = JSON.stringify(await r.json());
+    }
+
+    async function load() {
+      const r = await fetch("/api/connect/engineering/udt");
+      const j = await r.json();
+      if (r.ok) render(j.package);
+      else {
+        pkg = null;
+        meta.textContent = j.error || "Generate a package to begin";
+        out.textContent = JSON.stringify(j, null, 2);
+        document.getElementById("approve").disabled = true;
+        document.getElementById("exportApproved").disabled = true;
+      }
+    }
+
+    document.getElementById("reload").onclick = load;
+    document.getElementById("generate").onclick = async () => {
+      const r = await fetch("/api/connect/engineering/udt/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ typesFilter: ["pump"] })
+      });
+      const j = await r.json();
+      if (!r.ok) { out.textContent = JSON.stringify(j, null, 2); return; }
+      render(j.package);
+    };
+    document.getElementById("approve").onclick = async () => {
+      if (!confirm("Approve this UDT package for export? This records engineer approval; it does not deploy to Ignition.")) return;
+      const r = await fetch("/api/connect/engineering/udt/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-P6-Role": "engineer" },
+        body: JSON.stringify({ actor: "engineer" })
+      });
+      const j = await r.json();
+      if (!r.ok) { out.textContent = JSON.stringify(j, null, 2); return; }
+      render(j.package);
+    };
+    document.getElementById("exportPreview").onclick = () => {
+      window.location = "/api/connect/engineering/udt/export?forcePreview=1";
+    };
+    document.getElementById("exportApproved").onclick = () => {
+      window.location = "/api/connect/engineering/udt/export";
+    };
+
+    loadStatus();
+    load();
+  </script>
+</body>
+</html>

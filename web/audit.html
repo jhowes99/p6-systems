@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Audit Log — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      .rowTop{ display:flex; align-items:flex-end; justify-content: space-between; gap: 12px; flex-wrap:wrap; }
+      .pre{ background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 10px; overflow:auto; max-height: 70vh; }
+      .ctrl{ display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
+    </style>
+  </head>
+  <body data-app-active="audit">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <div class="rowTop">
+        <div>
+          <h1 style="margin:0;">Audit Log</h1>
+          <div class="small">Trace of imports, uploads, faults, and mode changes.</div>
+        </div>
+        <div class="ctrl">
+          <label class="small">Limit <input id="limit" type="number" value="200" min="10" max="400" style="width:110px;" /></label>
+          <button class="btn secondary" id="btnRefresh">Refresh</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <pre id="out" class="pre"></pre>
+      </div>
+    </main>
+
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script>
+      async function load() {
+        const limit = Number(document.getElementById("limit").value || 200);
+        const r = await fetch("/api/audit?limit=" + encodeURIComponent(limit));
+        const j = await r.json();
+        document.getElementById("out").textContent = JSON.stringify(j, null, 2);
+      }
+      document.getElementById("btnRefresh").onclick = load;
+      load();
+    </script>
+  </body>
+</html>
+

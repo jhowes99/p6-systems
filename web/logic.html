@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Live Logic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+</head>
+<body data-app-active="logic">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <h1 style="margin:0;">Staged Logic Deployment</h1>
+    <p class="small">Validate → stage → apply at scan boundary → rollback. Partial validation never applies.</p>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin:1rem 0;">
+      <button id="status" type="button">Status</button>
+      <button id="stage" type="button">Re-stage current IR</button>
+      <button id="apply" type="button">Apply staged</button>
+      <button id="rollback" type="button">Rollback</button>
+    </div>
+    <pre id="out" class="small" style="background:#f6f8f7;padding:1rem;border:1px solid #ddd;white-space:pre-wrap;"></pre>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    const out = document.getElementById("out");
+    const j = async (url, opts) => { const r = await fetch(url, opts); return r.json(); };
+    document.getElementById("status").onclick = async () => { out.textContent = JSON.stringify(await j("/api/runtime/logic"), null, 2); };
+    document.getElementById("stage").onclick = async () => {
+      const cur = await j("/api/runtime/logic");
+      out.textContent = JSON.stringify(await j("/api/runtime/logic/stage", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ir: cur.program, note: "restage-current" })
+      }), null, 2);
+    };
+    document.getElementById("apply").onclick = async () => {
+      out.textContent = JSON.stringify(await j("/api/runtime/logic/apply", { method: "POST", body: "{}" }), null, 2);
+    };
+    document.getElementById("rollback").onclick = async () => {
+      out.textContent = JSON.stringify(await j("/api/runtime/logic/rollback", { method: "POST", body: "{}" }), null, 2);
+    };
+    document.getElementById("status").click();
+  </script>
+</body>
+</html>

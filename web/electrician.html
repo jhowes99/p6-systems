@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Electrician View — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="electrician.css" />
+  </head>
+  <body data-app-active="simulate">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <div class="card" style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 14px;">
+        <div class="small" id="scanInfo"></div>
+        <div class="small" id="runHint">Click inputs like real pushbuttons. Safety stays visible.</div>
+      </div>
+
+      <section class="card">
+        <h2>Quick Controls</h2>
+        <div class="small" id="projectInfo"></div>
+        <div id="controls" class="panelGrid"></div>
+      </section>
+
+      <section class="card">
+        <h2>Devices / Outputs</h2>
+        <div id="devices" class="panelGrid"></div>
+      </section>
+
+      <section class="card">
+        <h2>What turns ON what (Simple)</h2>
+        <div class="small">This is a plain-English summary of each rung.</div>
+        <div id="logicList" class="logicList"></div>
+      </section>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script src="electrician.js"></script>
+  </body>
+</html>
+

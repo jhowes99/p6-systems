@@ -25,3 +25,22 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Local extract / scratch
+_extracted/
+*.gwbk
+
+# Runtime data (persist via Docker volume in compose)
+server/data/snapshots/
+server/data/packets/
+server/data/canonical/
+server/data/uploads/
+server/data/exports/
+server/data/verify/
+server/data/_smoke_engineer/
+server/data/_smoke_tmp/
+server/audit.log
+server/traceability_out/
+
+# Python venv (narrative)
+control_narrative_gen/.venv/

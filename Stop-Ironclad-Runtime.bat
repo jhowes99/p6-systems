@@ -1,10 +1,10 @@
 @echo off
-title Stop Ironclad Runtime
+title Stop P6 Systems
 set "ROOT=%~dp0"
 set "ROOT=%ROOT:~0,-1%"
 
 echo.
-echo  Stopping Ironclad Runtime...
+echo  Stopping P6 Systems...
 cd /d "%ROOT%"
 docker compose -f docker-compose.share.yml down
 echo.

@@ -69,8 +69,8 @@ This will:
 - Take several minutes (first time is slower)
 
 **Expected output:** Creates `dist/` folder with:
-- `Axiom Control Setup 1.0.0.exe` (NSIS installer)
-- `Axiom Control 1.0.0.msi` (MSI installer)
+- `P6 Systems Setup 1.0.0.exe` (NSIS installer)
+- `P6 Systems 1.0.0.msi` (MSI installer)
 
 ## Quick Copy-Paste Commands
 
@@ -111,4 +111,4 @@ C:\Work\Ironclad_Runtime\dist\
 ```
 
 Look for:
-- `Axiom Control Setup 1.0.0.exe` ← **This is what you distribute!**
+- `P6 Systems Setup 1.0.0.exe` ← **This is what you distribute!**

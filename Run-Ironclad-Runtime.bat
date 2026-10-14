@@ -1,5 +1,5 @@
 @echo off
-title Ironclad Runtime
+title P6 Systems
 setlocal EnableDelayedExpansion
 
 set "ROOT=%~dp0"
@@ -24,7 +24,7 @@ if not defined INSTALLER (
     echo.
     echo  Docker was not found on this computer.
     echo.
-    echo  To run Ironclad Runtime with one click:
+    echo  To run P6 Systems with one click:
     echo  1. Download Docker Desktop from: https://www.docker.com/products/docker-desktop/
     echo  2. Place "Docker Desktop Installer.exe" in this folder:
     echo     %ROOT%\installer\docker\
@@ -89,7 +89,7 @@ if not exist "%COMPOSE_FILE%" (
 )
 
 echo.
-echo  Starting Ironclad Runtime...
+echo  Starting P6 Systems...
 cd /d "%ROOT%"
 docker compose -f docker-compose.share.yml up -d --build
 if errorlevel 1 (
@@ -104,7 +104,7 @@ timeout /t 5 /nobreak >nul
 start "" "http://localhost:3000"
 
 echo.
-echo  Ironclad Runtime is running.
+echo  P6 Systems is running.
 echo  Your browser should open to http://localhost:3000
 echo.
 echo  To stop the app later, double-click: Stop-Ironclad-Runtime.bat

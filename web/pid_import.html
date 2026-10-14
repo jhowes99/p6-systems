@@ -1,0 +1,351 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>P&ID Import — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      .upload-area {
+        border: 2px dashed #ccc;
+        border-radius: 10px;
+        padding: 40px;
+        text-align: center;
+        background: #fafafa;
+        margin: 20px 0;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+      .upload-area:hover {
+        border-color: #111;
+        background: #f0f0f0;
+      }
+      .upload-area.dragover {
+        border-color: #111;
+        background: #e8e8e8;
+      }
+      .upload-area input[type="file"] {
+        display: none;
+      }
+      .json-input {
+        width: 100%;
+        min-height: 200px;
+        font-family: monospace;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        font-size: 16px;
+        color: #666;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+      }
+      .tab.active {
+        color: #111;
+        border-bottom-color: #111;
+        font-weight: 600;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      .result-panel {
+        margin-top: 30px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: #fff;
+      }
+      .result-panel h3 {
+        margin-top: 0;
+      }
+      .io-map {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+        margin: 15px 0;
+      }
+      .io-item {
+        padding: 8px;
+        background: #f4f4f4;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 14px;
+      }
+      .code-preview {
+        background: #f4f4f4;
+        padding: 15px;
+        border-radius: 6px;
+        overflow-x: auto;
+        font-family: monospace;
+        font-size: 12px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .btn-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .status {
+        padding: 10px;
+        border-radius: 6px;
+        margin: 10px 0;
+      }
+      .status.success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .status.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .status.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .status.warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffc107;
+      }
+      .status code {
+        background: rgba(0,0,0,0.1);
+        padding: 2px 4px;
+        border-radius: 3px;
+      }
+      .status.warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffc107;
+      }
+      .example-json {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        margin-top: 15px;
+        font-size: 12px;
+      }
+      .example-json code {
+        display: block;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body data-app-active="pid">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <h1>Import &amp; Generate</h1>
+      <p>
+        Upload P&amp;ID or logic diagrams to generate PLC code or control narratives.
+        Same flow: pick your file, click one button, get your output.
+      </p>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="bundle">Project Bundle</button>
+        <button class="tab" data-tab="file">Upload File</button>
+        <button class="tab" data-tab="narrative">Logic to Control Narrative</button>
+        <button class="tab" data-tab="scan">Scan-to-Build</button>
+        <button class="tab" data-tab="json">JSON Input</button>
+      </div>
+
+      <div id="tab-bundle" class="tab-content active">
+        <p>
+          <strong>Recommended:</strong> Upload P&ID + I/O List + Cause &amp; Effect (+ Narrative) for best PLC generation.
+        </p>
+
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">1) P&amp;ID (required for tag inventory)</h3>
+          <input type="file" id="bundlePid" accept=".pdf,.png,.jpg,.jpeg" />
+          <div class="small" style="color:#666; margin-top:6px;">
+            Tip: scanned PDFs/images will use OCR automatically.
+          </div>
+        </div>
+
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">2) I/O List (CSV/XLSX recommended)</h3>
+          <input type="file" id="bundleIo" accept=".csv,.xlsx,.xls,.pdf" />
+          <div class="small" style="color:#666; margin-top:6px;">
+            CSV/XLSX gives the best results (DI/DO/AI/AO mapping).
+          </div>
+        </div>
+
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">3) Cause &amp; Effect / Shutdown Philosophy (CSV/XLSX recommended)</h3>
+          <input type="file" id="bundleCE" accept=".csv,.xlsx,.xls,.pdf" />
+          <div class="small" style="color:#666; margin-top:6px;">
+            We build simple “cause → effect” rungs from this.
+          </div>
+        </div>
+
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">4) Control Narrative (optional, TXT/MD)</h3>
+          <input type="file" id="bundleNarrative" accept=".txt,.md" />
+        </div>
+
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">5) Alarms (optional, CSV/XLSX/TXT)</h3>
+          <input type="file" id="bundleAlarms" accept=".csv,.xlsx,.xls,.txt" />
+          <div class="small" style="color:#666; margin-top:6px;">
+            Upload an alarm list or rationalization for inclusion in the project.
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button id="btnBundleImport" class="btn">Export Logic from Bundle</button>
+        </div>
+
+        <div id="bundleStatus" style="margin-top: 12px;"></div>
+      </div>
+
+      <div id="tab-file" class="tab-content">
+        <div class="upload-area" id="uploadArea">
+          <p>📄 Drag and drop a P&ID file here, or click to browse</p>
+          <p style="font-size: 14px; color: #666; margin-top: 10px;">
+            Supported formats: PDF, PNG, JPG, JPEG
+          </p>
+          <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" />
+        </div>
+        <div id="fileStatus"></div>
+      </div>
+
+      <div id="tab-narrative" class="tab-content">
+        <p><strong>Logic to Control Narrative:</strong> Upload your logic/functional diagrams PDF. Same idea as P&amp;ID Import — one file, one button, full output.</p>
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">1) Logic/functional diagrams PDF <span style="color:#c00;">*</span></h3>
+          <input type="file" id="narrativeLogicFile" accept=".pdf,application/pdf" />
+          <div class="small" style="color:#666; margin-top:6px;">Steam Pressure, Fuel Gas, Oxygen Trim, Furnace Pressure, Drum Level, etc.</div>
+        </div>
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">2) Control narrative template (optional)</h3>
+          <input type="file" id="narrativeTemplateFile" accept=".pdf,application/pdf" />
+        </div>
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">3) Project &amp; customer</h3>
+          <input type="text" id="narrativeProject" placeholder="Project name" value="Combustion Control System, Fully Metered" style="width:100%; padding:8px; margin-bottom:8px; box-sizing:border-box;" />
+          <input type="text" id="narrativeCustomer" placeholder="Customer" value="TotalEnergies Port Arthur, TX." style="width:100%; padding:8px; box-sizing:border-box;" />
+        </div>
+        <div class="btn-group">
+          <button id="btnNarrativeGenerate" class="btn">Generate control narrative</button>
+        </div>
+        <div id="narrativeStatus" style="margin-top: 12px;"></div>
+        <div id="narrativeDownloads" style="margin-top: 12px; display:none;">
+          <h4 style="margin:0 0 8px 0;">Outputs — download below</h4>
+          <div id="narrativeDownloadList"></div>
+        </div>
+      </div>
+
+      <div id="tab-scan" class="tab-content">
+        <div class="card" style="margin: 14px 0;">
+          <h3 style="margin-top:0;">Scan Nameplate/QR/VFD Label</h3>
+          <p class="small" style="color:#666; margin-top:6px;">
+            Upload a photo of a nameplate, QR code, or VFD label. We'll use OCR to extract text and suggest a control pattern.
+          </p>
+          <div class="upload-area" id="scanUploadArea" style="margin-top: 12px;">
+            <p>📷 Drag and drop a photo here, or click to browse</p>
+            <p style="font-size: 14px; color: #666; margin-top: 10px;">
+              Supported formats: PNG, JPG, JPEG, WEBP
+            </p>
+            <input type="file" id="scanFileInput" accept=".png,.jpg,.jpeg,.webp" />
+          </div>
+          <div style="margin-top: 12px;">
+            <button id="btnScan" class="btn">Scan & Suggest</button>
+          </div>
+          <div id="scanStatus" style="margin-top: 12px;"></div>
+          <div id="scanSuggestions" style="margin-top: 12px;"></div>
+        </div>
+      </div>
+
+      <div id="tab-json" class="tab-content">
+        <label for="jsonInput"><strong>P&ID Data (JSON format):</strong></label>
+        <textarea id="jsonInput" class="json-input" placeholder='{
+  "instruments": [
+    { "tag": "PT-101", "type": "pressure_transmitter", "range": [0, 100] }
+  ],
+  "valves": [
+    { "tag": "XV-101", "type": "on_off", "normally": "closed" }
+  ],
+  "pumps": [
+    { "tag": "P-101", "interlock": "PT-101" }
+  ],
+  "control_loops": [
+    { "tag": "LC-101", "sensor": "LT-101", "actuator": "LV-101", "setpoint": 50 }
+  ]
+}'></textarea>
+        <div class="example-json">
+          <strong>Example JSON Structure:</strong>
+          <code>{
+  "instruments": [
+    { "tag": "PT-101", "type": "pressure_transmitter", "range": [0, 100], "description": "Pressure sensor" },
+    { "tag": "LT-101", "type": "level_transmitter", "range": [0, 200], "unit": "cm" }
+  ],
+  "valves": [
+    { "tag": "XV-101", "type": "on_off", "normally": "closed", "description": "Isolation valve" },
+    { "tag": "LV-101", "type": "control", "description": "Level control valve" }
+  ],
+  "pumps": [
+    { "tag": "P-101", "interlock": "PT-101", "description": "Main pump" }
+  ],
+  "control_loops": [
+    { "tag": "LC-101", "sensor": "LT-101", "actuator": "LV-101", "setpoint": 50, "type": "pid" }
+  ]
+}</code>
+        </div>
+        <div class="btn-group">
+          <button id="btnImportJSON" class="btn">Import from JSON</button>
+        </div>
+      </div>
+
+      <div id="resultPanel" class="result-panel" style="display: none;">
+        <h3>Generated PLC Code</h3>
+        <div id="statusMessage"></div>
+        
+        <div id="elementsSummary" style="margin: 15px 0;"></div>
+
+        <div id="ioMapping" style="display: none;">
+          <h4>I/O Mapping</h4>
+          <div class="io-map" id="ioMapContainer"></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <h4>PLC Code Preview (Ladder IR)</h4>
+          <div class="code-preview" id="codePreview"></div>
+        </div>
+
+        <div class="btn-group">
+          <button id="btnUploadToPLC" class="btn">Upload to PLC Runtime</button>
+          <button id="btnDownloadIR" class="btn secondary">Download IR JSON</button>
+          <button id="btnExportST" class="btn secondary">Export ST Code</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- OCR dependencies (client-side; served locally to avoid CDN issues) -->
+    <!-- PDF.js is loaded via dynamic import in pid_import.js (pdfjs-dist is ESM .mjs). -->
+    <script src="/vendor/tesseract/tesseract.min.js"></script>
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="pid_import.js"></script>
+  </body>
+</html>

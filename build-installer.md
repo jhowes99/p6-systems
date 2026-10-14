@@ -1,4 +1,4 @@
-# Building Windows Installer for Axiom Control
+# Building Windows Installer for P6 Systems
 
 ## Option 1: Electron + electron-builder (Recommended)
 
@@ -36,8 +36,8 @@ This creates a desktop application wrapper with MSI/EXE installers.
 
 3. **Output:**
    - Installers will be in the `dist/` folder
-   - `Axiom Control Setup x.x.x.exe` (NSIS installer)
-   - `Axiom Control x.x.x.msi` (MSI installer)
+   - `P6 Systems Setup x.x.x.exe` (NSIS installer)
+   - `P6 Systems x.x.x.msi` (MSI installer)
 
 ### What the installer includes:
 

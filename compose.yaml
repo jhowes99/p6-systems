@@ -1,13 +1,141 @@
-## Runtime-only compose (for Electron installer workflows)
+# P6 Systems — primary Compose file (Compose prefers compose.yaml over docker-compose.yml)
+#
+#   Core only:
+#     docker compose --profile core up --build
+#
+#   Core + Ignition:
+#     docker compose --profile core --profile ignition up --build
+#
+#   Core + integration smoke test:
+#     docker compose --profile core --profile integration-test up --build --abort-on-container-exit
+#
+#   Core includes MQTT broker by default (profile core).
+#   Core + Ignition + MQTT:
+#     docker compose --profile core --profile ignition up --build
+#
+# See docs/DOCKER.md / docs/PHASES_10_20.md
+
+name: p6-systems
+
 services:
-  axiom_runtime:
-    build: .
+  mosquitto:
+    profiles: ["core", "mqtt", "integration-test"]
+    image: eclipse-mosquitto:2.0.20
+    container_name: p6-mosquitto
     ports:
-      - "3000:3000"
-    environment:
-      PORT: 3000
-      ENABLE_PY: 0
-      TELEMETRY_BASE_URL: ""  # e.g. http://192.168.86.31:8080
-      NODE_ENV: production
-      HMI_AUTH_BYPASS: "1"
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
+
+  p6-app:
+    profiles: ["core", "integration-test"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: p6-systems/app:local
+    container_name: p6-app
+    depends_on:
+      - mosquitto
+    ports:
+      - "${P6_HTTP_PORT:-3000}:3000"
+      - "${OPCUA_PORT:-4840}:4840"
+    environment:
+      PORT: "3000"
+      NODE_ENV: "${NODE_ENV:-production}"
+      ENABLE_PY: "${ENABLE_PY:-0}"
+      HMI_AUTH_BYPASS: "${HMI_AUTH_BYPASS:-1}"
+      TELEMETRY_BASE_URL: "${TELEMETRY_BASE_URL:-}"
+      P6_SEED_WATER_TRANSFER: "${P6_SEED_WATER_TRANSFER:-1}"
+      ENABLE_OPCUA: "${ENABLE_OPCUA:-1}"
+      OPCUA_PORT: "${OPCUA_PORT:-4840}"
+      ENABLE_MQTT: "${ENABLE_MQTT:-1}"
+      MQTT_URL: "${MQTT_URL:-mqtt://mosquitto:1883}"
+      MQTT_TOPIC_PREFIX: "${MQTT_TOPIC_PREFIX:-p6systems}"
+      P6_DEFAULT_ROLE: "${P6_DEFAULT_ROLE:-engineer}"
+      NARRATIVE_PYTHON: /app/control_narrative_gen/.venv/bin/python3
+    volumes:
+      - p6_app_data:/app/server/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/features >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  ignition:
+    profiles: ["ignition"]
+    image: inductiveautomation/ignition:8.3.9
+    container_name: p6-ignition
+    ports:
+      - "${IGNITION_HTTP_PORT:-9088}:8088"
+      - "${IGNITION_HTTPS_PORT:-9043}:8043"
+    environment:
+      ACCEPT_IGNITION_EULA: "${ACCEPT_IGNITION_EULA:-N}"
+      GATEWAY_ADMIN_USERNAME: "${IGNITION_ADMIN_USERNAME:-admin}"
+      GATEWAY_ADMIN_PASSWORD: "${IGNITION_ADMIN_PASSWORD:-}"
+      IGNITION_EDITION: "${IGNITION_EDITION:-standard}"
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - p6_ignition_data:/usr/local/bin/ignition/data
+      # Perspective Water Transfer template (import / scan in Gateway)
+      - ./ignition/perspective/P6_WaterTransfer:/usr/local/bin/ignition/data/projects/P6_WaterTransfer:ro
+    command:
+      - "-n"
+      - "${IGNITION_GATEWAY_NAME:-P6-Dev-Gateway}"
+      - "-a"
+      - "${IGNITION_GATEWAY_ADDRESS:-localhost}"
+      - "-h"
+      - "${IGNITION_HTTP_PORT:-9088}"
+      - "-s"
+      - "${IGNITION_HTTPS_PORT:-9043}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/StatusPing || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+    restart: unless-stopped
+
+  integration-test:
+    profiles: ["integration-test"]
+    image: curlimages/curl:8.10.1
+    container_name: p6-integration-test
+    depends_on:
+      p6-app:
+        condition: service_healthy
+    environment:
+      P6_BASE_URL: "http://p6-app:3000"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "P6 integration-test: features"
+        curl -fsS "$$P6_BASE_URL/api/features" >/dev/null
+        echo "P6 integration-test: readiness"
+        curl -fsS "$$P6_BASE_URL/api/readiness" | head -c 400
+        echo
+        echo "P6 integration-test: verify FAT"
+        curl -fsS -X POST "$$P6_BASE_URL/api/verify/run" -H "Content-Type: application/json" -d '{}' | head -c 300
+        echo
+        echo "P6 integration-test: opcua status"
+        curl -fsS "$$P6_BASE_URL/api/connect/opcua" | head -c 300
+        echo
+        echo "P6 integration-test: mqtt status"
+        curl -fsS "$$P6_BASE_URL/api/connect/mqtt" | head -c 300
+        echo
+        echo "P6 integration-test: PASS"
+    restart: "no"
+
+volumes:
+  p6_app_data:
+    name: p6_app_data
+  p6_ignition_data:
+    name: p6_ignition_data

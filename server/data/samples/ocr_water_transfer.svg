@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" role="img">
+  <title>Water Transfer P&amp;ID excerpt</title>
+  <desc>from TANK-101 to P-101; P-101 feeds XV-101; XV-101 to TANK-102</desc>
+  <text x="40" y="40">TANK-101</text>
+  <text x="200" y="40">P-101</text>
+  <text x="200" y="70">M-101</text>
+  <text x="360" y="40">XV-101</text>
+  <text x="520" y="40">TANK-102</text>
+  <text x="520" y="90">LSH-101</text>
+  <text x="40" y="200">ESTOP-101</text>
+  <line x1="100" y1="50" x2="190" y2="50" stroke="#333" />
+  <line x1="240" y1="50" x2="350" y2="50" stroke="#333" />
+  <line x1="400" y1="50" x2="510" y2="50" stroke="#333" />
+</svg>

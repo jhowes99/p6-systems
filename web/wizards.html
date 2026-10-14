@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Control Templates — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <style>
+      .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+      .card2 { border:1px solid #ddd; border-radius: 12px; padding: 14px; background:#fff; }
+      .small { font-size: 12px; color: #444; }
+      .row { display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
+      .btn { display:inline-block; padding:10px 12px; border-radius: 10px; border:1px solid #111; background:#111; color:#fff; cursor:pointer; }
+      .btn.secondary { background:#fff; color:#111; }
+      .status { margin-top: 10px; }
+      pre { background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 10px; overflow:auto; }
+    </style>
+  </head>
+  <body data-app-active="wizards">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <h1>Control Templates</h1>
+      <p class="small">Answer real-world questions → we generate logic you can simulate.</p>
+
+      <div class="grid">
+        <div class="card2">
+          <h2>Start / Stop Motor</h2>
+          <div class="small">Creates Start PB, Stop PB (NC), E-Stop (NC), Overload (NC) → Motor coil.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizStartStop">Generate</button>
+            <button class="btn secondary" id="wizStartStopUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizStartStopBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Forward / Reverse Motor</h2>
+          <div class="small">Creates FWD and REV outputs with electrical interlock (no simultaneous run).</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizFwdRev">Generate</button>
+            <button class="btn secondary" id="wizFwdRevUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizFwdRevBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Safety Configuration Wizard</h2>
+          <div class="small">Guides you through setting up E-Stops, overloads, and safety interlocks.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizSafety">Start Wizard</button>
+            <button class="btn secondary" id="wizSafetyBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Star–Delta Starter</h2>
+          <div class="small">Uses a timeline: Main+Star ON → delay → Star OFF, Delta ON.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizStarDelta">Generate</button>
+            <button class="btn secondary" id="wizStarDeltaUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizStarDeltaBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Conveyor w/ Jam Sensor</h2>
+          <div class="small">Start/Stop with Jam sensor interlock. Jam stops conveyor.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizConveyor">Generate</button>
+            <button class="btn secondary" id="wizConveyorUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizConveyorBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Pump Alternation</h2>
+          <div class="small">Choose: selector-based (simple) or auto-alternation (toggles pump each start).</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizPumpAlt">Generate</button>
+            <button class="btn secondary" id="wizPumpAltUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizPumpAltBuild">View in Build</button>
+            <button class="btn" id="wizPumpAltAuto">Auto Alternate</button>
+            <button class="btn secondary" id="wizPumpAltAutoUpload">Auto Alternate + Upload</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Two Motor System</h2>
+          <div class="small">Two independent motors with separate controls and shared E-Stop.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizTwoMotor">Generate</button>
+            <button class="btn secondary" id="wizTwoMotorUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizTwoMotorBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Light Control</h2>
+          <div class="small">Light turns ON when switch is ON OR motion sensor detects movement.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizLight">Generate</button>
+            <button class="btn secondary" id="wizLightUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizLightBuild">View in Build</button>
+          </div>
+        </div>
+
+        <div class="card2">
+          <h2>Valve Control</h2>
+          <div class="small">Open/Close valve with limit switches and E-Stop protection.</div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="wizValve">Generate</button>
+            <button class="btn secondary" id="wizValveUpload">Generate + Upload</button>
+            <button class="btn secondary" id="wizValveBuild">View in Build</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card2" style="margin-top: 14px;">
+        <h2>Preview</h2>
+        <div id="status" class="status small"></div>
+        <pre id="preview"></pre>
+      </div>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script src="wizards.js"></script>
+  </body>
+</html>
+

@@ -1,9 +1,9 @@
-Axiom Control (Ironclad Runtime) / Axiom Verify
+P6 Systems (P6 Systems) / P6 Verify
 ==============================================
 
 What it is
 ----------
-Axiom Control is a local “virtual PLC” runtime with a web UI.
+P6 Systems is a local “virtual PLC” runtime with a web UI.
 You can:
 - Generate control logic from OT artifacts (P&IDs, I/O lists, Cause & Effect)
 - Run the logic locally in a scan-based virtual PLC

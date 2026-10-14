@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Project Wizard — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="project_wizard.css" />
+  </head>
+  <body data-app-active="project">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <div class="rowTop">
+        <div>
+          <h1 style="margin:0;">Project Import Wizard</h1>
+          <div class="small">Bring an OT-standard I/O list + Cause &amp; Effect table and generate runnable logic.</div>
+        </div>
+        <div class="small" id="scanInfo"></div>
+      </div>
+
+      <div class="cards">
+        <section class="card">
+          <h2 style="margin-top:0;">1) I/O List</h2>
+          <div class="small">CSV/XLSX recommended. We use this for tag names and I/O mapping.</div>
+          <input type="file" id="ioFile" accept=".csv,.xlsx,.xls,.pdf" />
+          <div class="hint small">
+            Typical columns: <code>tag</code>, <code>type</code>, <code>service</code>, <code>description</code>.
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 style="margin-top:0;">2) Cause &amp; Effect</h2>
+          <div class="small">CSV/XLSX recommended. We compile “cause → effect” into rungs.</div>
+          <input type="file" id="ceFile" accept=".csv,.xlsx,.xls,.pdf" />
+          <div class="hint small">
+            Typical columns: <code>Cause</code>/<code>Trip</code> and <code>Effect</code>/<code>Action</code>.
+          </div>
+        </section>
+      </div>
+
+      <section class="card" style="margin-top:14px;">
+        <h2 style="margin-top:0;">3) Generate</h2>
+        <div class="rowBtns">
+          <button id="btnGenerate" class="btn">Generate PLC Logic</button>
+          <button id="btnUpload" class="btn secondary" disabled>Upload to Runtime</button>
+          <a class="btn secondary" href="/monitor.html">Open Monitor</a>
+        </div>
+        <div id="status" class="status small"></div>
+      </section>
+
+      <section class="card" style="margin-top:14px;">
+        <h2 style="margin-top:0;">Result</h2>
+        <div id="summary" class="small"></div>
+        <details style="margin-top:10px;">
+          <summary class="small" style="cursor:pointer;"><strong>Warnings</strong> (click)</summary>
+          <div id="warnings" class="small" style="margin-top:10px;"></div>
+        </details>
+        <details style="margin-top:10px;">
+          <summary class="small" style="cursor:pointer;"><strong>I/O Map</strong> (click)</summary>
+          <pre id="ioMap" class="pre"></pre>
+        </details>
+        <details style="margin-top:10px;">
+          <summary class="small" style="cursor:pointer;"><strong>IR Preview</strong> (click)</summary>
+          <pre id="irPreview" class="pre"></pre>
+        </details>
+      </section>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script src="project_wizard.js"></script>
+  </body>
+</html>
+

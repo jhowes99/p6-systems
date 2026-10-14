@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Exports — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      .card { border:1px solid #ddd; border-radius: 12px; padding: 14px; background:#fff; }
+      .row { display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
+      .btn { display:inline-block; padding:10px 12px; border-radius: 10px; border:1px solid #111; background:#111; color:#fff; cursor:pointer; }
+      .btn.secondary { background:#fff; color:#111; }
+      .btn-primary { background:#0f172a; color:#fff; }
+      pre { background:#f7f7f7; padding:10px; border:1px solid #ddd; border-radius: 10px; overflow:auto; }
+      .small { font-size: 12px; color:#444; }
+      .section-title { font-size: 14px; font-weight: 700; margin: 0 0 8px 0; color: #334155; }
+    </style>
+  </head>
+  <body data-app-active="exports">
+    <div id="appShell"></div>
+
+    <main class="wrap page">
+      <div class="page-header">
+        <div class="page-breadcrumb">Exports</div>
+        <h1 class="page-title">Deploy</h1>
+        <p class="page-subtitle">Export commissioning packet, code, and panel documents.</p>
+      </div>
+
+      <div id="emptyStateExports" class="empty-state" style="display:none;">
+        <p>No project loaded. Go to Import to load a bundle.</p>
+        <a href="/pid_import.html" class="btn btn-primary">Import Bundle</a>
+      </div>
+
+      <div id="exportsContent">
+        <div class="card" id="outcomeCard" style="margin-bottom: 14px;">
+          <h2 class="section-title">Deployment Status</h2>
+          <div id="outcomeStatus" class="small">
+            <div style="padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #0ea5e9;">
+              <strong>Checking program status...</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card section">
+          <h2 class="section-title">A) One-click Commissioning Packet</h2>
+          <p class="small" style="margin-bottom: 10px;">Single download: validation, tests, I/O list, terminal plan, wire schedule, checkout, IR, and README. After download, the project is reset so you can import another.</p>
+          <div class="row">
+            <button class="btn btn-primary" id="btnCommissioningPacket">Download Commissioning Packet</button>
+          </div>
+          <div class="recent-packets" style="margin-top: 16px;">
+            <h3 class="section-title" style="font-size: 13px; margin-bottom: 8px;">Recent packets</h3>
+            <p class="small" style="margin-bottom: 8px;">Re-download a previous packet (e.g. if you need the last one after reset):</p>
+            <ul id="recentPacketsList" class="recent-packets-list" style="list-style: none; padding: 0; margin: 0;"></ul>
+            <p id="recentPacketsNone" class="small" style="display: none; color: #64748b;">No packets yet. Download a commissioning packet to see it here.</p>
+          </div>
+        </div>
+
+        <div class="card section">
+          <h2 class="section-title">B) Code Exports</h2>
+          <p class="small" style="margin-bottom: 10px;">Export your program to PLC platforms:</p>
+          <p class="small" style="margin-bottom: 10px;padding:0.65rem 0.75rem;border:1px solid #f59e0b;background:#fffbeb;border-radius:8px;color:#78350f;">
+            <b>LIMIT:</b> Allen-Bradley download is a <b>placeholder</b> (sample CSVs only) — not a validated vendor import package.
+            Codesys ST / Siemens SCL / Python exports are the supported paths for this MVP.
+          </p>
+          <div class="row">
+            <button class="btn secondary" id="btnCodesys">Download Codesys ST</button>
+            <button class="btn secondary" id="btnSiemens">Download Siemens SCL</button>
+            <button class="btn secondary" id="btnPython">Download Python</button>
+            <button class="btn secondary" id="btnAB" title="Placeholder only — not a validated AB import">Download Allen-Bradley Placeholder</button>
+          </div>
+          <div class="small" id="msg" style="margin-top:10px;"></div>
+          <pre id="preview" style="margin-top:10px;"></pre>
+        </div>
+
+        <div class="card section">
+          <h2 class="section-title">C) Commissioning Exports</h2>
+          <p class="small" style="margin-bottom: 10px;">Terminal plan, wire schedule, and I/O checkout (requires last imported project):</p>
+          <div class="row">
+            <button class="btn secondary" id="btnTerminalPlan">Download Terminal Plan (CSV)</button>
+            <button class="btn secondary" id="btnWireSchedule">Download Wire Schedule (CSV)</button>
+            <button class="btn secondary" id="btnIOCheckout">Download I/O Checkout (CSV)</button>
+          </div>
+        </div>
+
+        <div class="card section">
+          <h2 class="section-title">D) I/O List</h2>
+          <p class="small" style="margin-bottom: 10px;">Structured I/O list for wiring and PLC configuration:</p>
+          <div class="row">
+            <button class="btn secondary" id="btnIOListCSV">Download I/O List (CSV)</button>
+            <button class="btn secondary" id="btnIOListJSON">Download I/O List (JSON)</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="ui.js"></script>
+    <script src="app_shell.js"></script>
+    <script src="exports.js"></script>
+  </body>
+</html>
+

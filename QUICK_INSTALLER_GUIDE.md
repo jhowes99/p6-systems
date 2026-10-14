@@ -1,4 +1,4 @@
-# Quick Guide: Creating Windows Installer for Axiom Control
+# Quick Guide: Creating Windows Installer for P6 Systems
 
 ## 🚀 Recommended: Electron Builder (Easiest)
 
@@ -47,7 +47,7 @@ npm run build:win:msi
 ### Step 3: Find Your Installer
 
 Look in the `dist/` folder:
-- ✅ `Axiom Control Setup 1.0.0.exe` - Ready to distribute!
+- ✅ `P6 Systems Setup 1.0.0.exe` - Ready to distribute!
 
 ### What Users Get
 
@@ -75,7 +75,7 @@ If you don't want to use Electron, use the simple batch installer:
 Create a portable version:
 
 1. Run `installer/create-portable.bat`
-2. Creates `AxiomControl-Portable-1.0.0.zip`
+2. Creates `P6Systems-Portable-1.0.0.zip`
 3. Users extract and run `Start.bat`
 4. **Note:** Requires Node.js to be pre-installed
 

@@ -1,0 +1,47 @@
+.wrap { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.card { border: 1px solid rgba(15,23,42,.12); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.92); }
+
+.panelGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
+
+.tile {
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,250,252,.92));
+  display: grid;
+  gap: 8px;
+}
+.tile.safety { border-color: rgba(250,204,21,.45); box-shadow: 0 0 0 2px rgba(250,204,21,.10); }
+.tileTop { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tag { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; background: rgba(15,23,42,.06); padding: 2px 6px; border-radius: 8px; }
+.metaRow { display:flex; gap: 8px; align-items:center; flex-wrap: wrap; }
+.name { font-weight: 700; }
+.meta { color: #555; font-size: 12px; }
+
+.btnBig {
+  border: 1px solid #111;
+  border-radius: 12px;
+  padding: 14px;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+.btnBig.secondary { background: #fff; color: #111; }
+.btnBig:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.lampRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lamp {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid #999; background: #fff;
+}
+.lamp.on { border-color: var(--energized); background: #34d399; box-shadow: 0 0 0 4px rgba(22,163,74,.10); }
+.lamp.off { border-color: rgba(185,28,28,.60); background: #fca5a5; }
+
+.logicList { display: grid; gap: 8px; margin-top: 12px; }
+.logicItem { border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fff; }
+.logicItem .when { font-weight: 700; }
+.logicItem .then { margin-top: 4px; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(15,23,42,.14); background: rgba(255,255,255,.92); margin-right: 6px; font-weight: 900; }
+.pill.active { border-color: rgba(47,93,138,.40); background: rgba(47,93,138,.12); color: var(--steel); }
+

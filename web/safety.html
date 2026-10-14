@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Define Safety — P6 Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="site.css" />
+    <link rel="stylesheet" href="app_shell.css" />
+    <link rel="stylesheet" href="safety.css" />
+  </head>
+  <body data-app-active="safety">
+    <div id="appShell"></div>
+
+    <main class="wrap">
+      <div class="safetyTop">
+        <div>
+          <h1 style="margin:0;">Define Safety</h1>
+          <div class="small">
+            Configure safety interlocks, E-Stops, and safety chain requirements.
+          </div>
+        </div>
+      </div>
+
+      <div class="safetyLayout">
+        <aside class="card safetySidebar">
+          <h2 style="margin:0 0 12px 0;">Safety Wizard</h2>
+          <div class="small" style="margin-bottom: 16px;">
+            Use the wizard to quickly set up common safety configurations.
+          </div>
+          <button class="btn" id="btnSafetyWizard" style="width: 100%;">Start Safety Wizard</button>
+          
+          <hr style="margin: 20px 0;" />
+          
+          <h3 style="margin:0 0 12px 0; font-size: 14px;">Quick Actions</h3>
+          <div class="quickActions">
+            <button class="btn secondary" id="btnAddEStop">+ Add E-Stop</button>
+            <button class="btn secondary" id="btnAddOverload">+ Add Overload</button>
+            <button class="btn secondary" id="btnAddInterlock">+ Add Interlock</button>
+          </div>
+        </aside>
+
+        <div class="safetyMain">
+          <div class="safetyTabs">
+            <button class="safetyTab active" data-tab="estop">E-Stop Configuration</button>
+            <button class="safetyTab" data-tab="interlocks">Safety Interlocks</button>
+            <button class="safetyTab" data-tab="chain">Safety Chain</button>
+            <button class="safetyTab" data-tab="review">Safety Review</button>
+          </div>
+
+          <!-- E-Stop Configuration Tab -->
+          <div id="tabEStop" class="safetyTabContent active">
+            <h2 style="margin:0 0 10px 0;">Emergency Stop Configuration</h2>
+            <div class="small" style="margin-bottom: 16px;">
+              Configure your E-Stop inputs. E-Stops must be in the normal (ON) position to allow operation.
+            </div>
+            
+            <div class="card2">
+              <div class="sectionHeader">
+                <h3 style="margin:0;">E-Stop Inputs</h3>
+                <button class="btn secondary" id="btnSelectEStop">Select from I/O</button>
+              </div>
+              <div id="estopList" class="deviceList"></div>
+              <div id="estopEmpty" class="emptyState" style="display:none;">
+                <div class="emptyIcon">⚠️</div>
+                <div class="emptyText">No E-Stop configured</div>
+                <div class="emptyHint">Add an E-Stop input to ensure safe operation.</div>
+              </div>
+            </div>
+
+            <div class="card2" style="margin-top: 16px;">
+              <h3 style="margin:0 0 12px 0;">E-Stop Behavior</h3>
+              <div class="formGroup">
+                <label class="checkboxLabel">
+                  <input type="checkbox" id="chkEStopAutoReset" checked />
+                  <span>Require manual reset after E-Stop activation</span>
+                </label>
+              </div>
+              <div class="formGroup">
+                <label class="checkboxLabel">
+                  <input type="checkbox" id="chkEStopAllOutputs" checked />
+                  <span>E-Stop disables all outputs (safety chain)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Safety Interlocks Tab -->
+          <div id="tabInterlocks" class="safetyTabContent">
+            <h2 style="margin:0 0 10px 0;">Safety Interlocks</h2>
+            <div class="small" style="margin-bottom: 16px;">
+              Configure safety interlocks that must be satisfied before outputs can energize.
+            </div>
+            
+            <div class="card2">
+              <div class="sectionHeader">
+                <h3 style="margin:0;">Interlock Conditions</h3>
+                <button class="btn secondary" id="btnAddInterlockCondition">+ Add Condition</button>
+              </div>
+              <div id="interlockList" class="interlockList"></div>
+              <div id="interlockEmpty" class="emptyState" style="display:none;">
+                <div class="emptyIcon">🔒</div>
+                <div class="emptyText">No interlocks configured</div>
+                <div class="emptyHint">Add interlock conditions to protect equipment and personnel.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Safety Chain Tab -->
+          <div id="tabChain" class="safetyTabContent">
+            <h2 style="margin:0 0 10px 0;">Safety Chain</h2>
+            <div class="small" style="margin-bottom: 16px;">
+              Review the complete safety chain that protects your system.
+            </div>
+            
+            <div class="card2">
+              <h3 style="margin:0 0 12px 0;">Safety Chain Overview</h3>
+              <div id="safetyChainView" class="safetyChainView"></div>
+            </div>
+
+            <div class="card2" style="margin-top: 16px;">
+              <h3 style="margin:0 0 12px 0;">Safety Chain Logic</h3>
+              <div id="safetyChainLogic" class="safetyChainLogic"></div>
+            </div>
+          </div>
+
+          <!-- Safety Review Tab -->
+          <div id="tabReview" class="safetyTabContent">
+            <h2 style="margin:0 0 10px 0;">Safety Review</h2>
+            <div class="small" style="margin-bottom: 16px;">
+              Review your safety configuration and verify all requirements are met.
+            </div>
+            
+            <div class="card2">
+              <h3 style="margin:0 0 12px 0;">Safety Checklist</h3>
+              <div id="safetyChecklist" class="safetyChecklist"></div>
+            </div>
+
+            <div class="card2" style="margin-top: 16px;">
+              <h3 style="margin:0 0 12px 0;">Safety Summary</h3>
+              <div id="safetySummary" class="safetySummary"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="app_shell.js"></script>
+    <script src="safety.js"></script>
+  </body>
+</html>

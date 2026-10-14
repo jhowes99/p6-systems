@@ -1,0 +1,219 @@
+openapi: 3.0.3
+info:
+  title: P6 Systems API (baseline)
+  description: |
+    Part 17 baseline contract for routes currently implemented by the p6-app monolith.
+    Not a complete OpenAPI of every legacy PLC endpoint. Event streaming (WebSocket)
+    is specified here as planned — HTTP polling of /api/runtime/events is the live path today.
+  version: 0.13.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/model/health:
+    get:
+      summary: Canonical model store health
+      responses:
+        "200":
+          description: OK
+  /api/model/projects:
+    get:
+      summary: List projects
+      responses:
+        "200":
+          description: Project summaries
+    post:
+      summary: Create project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Created
+  /api/model/projects/active:
+    get:
+      summary: Get active project
+      responses:
+        "200":
+          description: Active project or null
+    post:
+      summary: Set active project
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectId]
+              properties:
+                projectId: { type: string }
+      responses:
+        "200":
+          description: Activated
+  /api/model/projects/seed/tank-transfer-demo:
+    post:
+      summary: Ensure Part 13 sample plant and set active
+      responses:
+        "200":
+          description: Existing demo
+        "201":
+          description: Created demo
+  /api/model/projects/{id}:
+    patch:
+      summary: Update project name/description/wizard state
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                wizard: { type: object }
+      responses:
+        "200":
+          description: Updated
+  /api/model/projects/{id}/graph:
+    patch:
+      summary: Persist engineering map layout
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nodes:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      x: { type: number }
+                      y: { type: number }
+      responses:
+        "200":
+          description: Graph saved
+  /api/runtime/status:
+    get:
+      summary: Runtime / sim clock status
+      responses:
+        "200":
+          description: Status
+  /api/runtime/canvas:
+    get:
+      summary: Engineering map nodes with live signal values
+      responses:
+        "200":
+          description: Canvas payload
+  /api/runtime/command:
+    post:
+      summary: Command a signal through Runtime with permissive checks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag]
+              properties:
+                tag: { type: string }
+                value: {}
+                force: { type: boolean }
+                override: { type: boolean }
+      responses:
+        "200":
+          description: Accepted
+        "409":
+          description: Rejected by permissives
+  /api/runtime/bind:
+    post:
+      summary: Bind Runtime IO bridge to a project
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectId: { type: string }
+      responses:
+        "200":
+          description: Bound
+  /api/runtime/events:
+    get:
+      summary: Recent runtime events (HTTP poll baseline)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Event list
+  /api/runtime/start:
+    post:
+      summary: Start scanning
+      responses:
+        "200":
+          description: Started
+  /api/runtime/reset:
+    post:
+      summary: Reset runtime / equipment
+      responses:
+        "200":
+          description: Reset
+  /api/verify/run:
+    post:
+      summary: Run P101_ESTOP_SHUTDOWN FAT
+      responses:
+        "200":
+          description: FAT result
+  /api/ingest/ocr:
+    post:
+      summary: Extract text/candidates from uploaded document
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Extraction result
+  /api/ingest/ocr/promote:
+    post:
+      summary: Promote reviewed candidates into canonical model
+      responses:
+        "200":
+          description: Promote result
+  /api/connect/opcua:
+    get:
+      summary: OPC UA server status
+      responses:
+        "200":
+          description: Status
+  /api/connect/mqtt:
+    get:
+      summary: MQTT publisher status
+      responses:
+        "200":
+          description: Status
+x-planned:
+  websocketEventStream:
+    path: /api/runtime/stream
+    status: not_implemented
+    note: Part 17 / Phase 3 depth — use GET /api/runtime/events until WS lands

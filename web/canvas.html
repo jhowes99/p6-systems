@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>P6 Live Canvas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="site.css" />
+  <link rel="stylesheet" href="app_shell.css" />
+  <link rel="stylesheet" href="ui.css" />
+  <style>
+    .canvasWrap { position: relative; height: 520px; border: 1px solid #ccc; background:
+      linear-gradient(#eef2f0 1px, transparent 1px) 0 0/24px 24px,
+      linear-gradient(90deg, #eef2f0 1px, transparent 1px) 0 0/24px 24px, #f7faf8; overflow: auto; }
+    .node { position: absolute; width: 160px; padding: 0.6rem; border: 2px solid #2d6a4f; background: #fff; cursor: pointer; font-family: ui-monospace, monospace; font-size: 0.75rem; }
+    .node.alarm { border-color: #b00020; background: #fff5f5; }
+    .node.run { border-color: #1b7a3d; box-shadow: 0 0 0 2px rgba(27,122,61,0.2); }
+    .node h3 { margin: 0 0 0.35rem; font-size: 0.85rem; }
+    .detail { margin-top: 1rem; border: 1px solid #ddd; padding: 1rem; background: #fff; min-height: 8rem; }
+    svg.links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  </style>
+</head>
+<body data-app-active="canvas">
+  <div id="appShell"></div>
+  <main class="wrap">
+    <h1 style="margin:0;">Live Engineering Canvas</h1>
+    <p class="small">Equipment nodes use live runtime signals — not decorative mocks. Click a node for details.</p>
+    <div id="meta" class="small"></div>
+    <div class="canvasWrap" id="stage">
+      <svg class="links" id="links"></svg>
+    </div>
+    <div class="detail" id="detail">Select equipment…</div>
+  </main>
+  <script src="ui.js"></script>
+  <script src="app_shell.js"></script>
+  <script>
+    const stage = document.getElementById("stage");
+    const linksSvg = document.getElementById("links");
+    const detail = document.getElementById("detail");
+    let last = null;
+
+    function statusClass(node) {
+      const live = node.live || {};
+      const vals = Object.values(live);
+      if (Object.keys(live).some(k => k.includes("ESTOP") && live[k] === false)) return "alarm";
+      if (Object.keys(live).some(k => (k.includes("Running") || k.includes("Energize") || k.includes("Open")) && live[k] === true)) return "run";
+      return "";
+    }
+
+    async function refresh() {
+      const res = await fetch("/api/runtime/canvas");
+      const data = await res.json();
+      last = data;
+      document.getElementById("meta").textContent = `${data.name || ""} | mode=${data.mode} | sim=${data.sim?.timeMs}ms | trip(M1)=${data.mem?.M1}`;
+      [...stage.querySelectorAll(".node")].forEach(n => n.remove());
+      linksSvg.innerHTML = "";
+      const byId = Object.fromEntries((data.nodes||[]).map(n => [n.id, n]));
+      for (const link of data.links || []) {
+        const a = byId[link.from], b = byId[link.to];
+        if (!a || !b) continue;
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", a.x + 80); line.setAttribute("y1", a.y + 30);
+        line.setAttribute("x2", b.x + 80); line.setAttribute("y2", b.y + 30);
+        line.setAttribute("stroke", "#88a"); line.setAttribute("stroke-width", "2");
+        linksSvg.appendChild(line);
+      }
+      for (const node of data.nodes || []) {
+        const el = document.createElement("div");
+        el.className = "node " + statusClass(node);
+        el.style.left = node.x + "px"; el.style.top = node.y + "px";
+        el.innerHTML = `<h3>${node.tag}</h3><div>${node.type}</div><div>${JSON.stringify(node.live)}</div>`;
+        el.onclick = () => {
+          detail.innerHTML = `<b>${node.tag}</b> (${node.type})<pre>${JSON.stringify(node, null, 2)}</pre>
+            <p class="small"><a href="/trace.html?tag=${encodeURIComponent(Object.keys(node.live||{})[0]||node.tag)}">Trace signal →</a></p>`;
+        };
+        stage.appendChild(el);
+      }
+    }
+    refresh(); setInterval(refresh, 500);
+  </script>
+</body>
+</html>
